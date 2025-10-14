@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ..rag.embeddings import OllamaEmbeddingGenerator
+from ..rag.embeddings import EmbeddingGenerator
 from ..rag.vector_store import VectorStore
 from ..utils.config import Config, ConfigError, get_config
 
@@ -66,7 +66,7 @@ def init_command(force: bool):
         console.print("\n[cyan]Ollamaサーバーへの接続を確認中...[/cyan]")
 
         try:
-            embeddings = OllamaEmbeddingGenerator(config)
+            embeddings = EmbeddingGenerator(config)
             # テスト用の埋め込み生成
             test_embedding = embeddings.embed_query("test")
 
@@ -182,7 +182,7 @@ def status_command(verbose: bool):
 
         # Ollamaへの接続確認
         try:
-            embeddings = OllamaEmbeddingGenerator(config)
+            embeddings = EmbeddingGenerator(config)
             embeddings.embed_query("test")
             ollama_status = "[green]✓ 接続OK[/green]"
         except Exception:
