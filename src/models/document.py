@@ -1,10 +1,10 @@
-"""Data models for RAG application.
+"""RAGアプリケーションのデータモデル。
 
-This module defines the core data structures used throughout the application:
-- Document: Represents a source document with metadata
-- Chunk: Represents a split text chunk with metadata
-- SearchResult: Represents a search result with similarity score
-- ChatMessage: Represents a chat message in conversation history
+このモジュールはアプリケーション全体で使用される中核的なデータ構造を定義します:
+- Document: メタデータを含むソースドキュメントを表現
+- Chunk: メタデータを含む分割されたテキストチャンクを表現
+- SearchResult: 類似度スコアを含む検索結果を表現
+- ChatMessage: 会話履歴内のチャットメッセージを表現
 """
 
 from dataclasses import dataclass, field
@@ -15,16 +15,16 @@ from typing import Any
 
 @dataclass
 class Document:
-    """Represents a source document with metadata.
+    """メタデータを含むソースドキュメントを表現する。
 
     Attributes:
-        file_path: Absolute path to the source file
-        name: Document name (typically filename)
-        content: Full text content of the document
-        doc_type: File type/extension (e.g., 'txt', 'pdf', 'md')
-        source: Source identifier (typically file path string)
-        timestamp: Creation/addition timestamp
-        metadata: Additional metadata dictionary
+        file_path: ソースファイルへの絶対パス
+        name: ドキュメント名（通常はファイル名）
+        content: ドキュメントの全文テキストコンテンツ
+        doc_type: ファイルタイプ/拡張子（例: 'txt', 'pdf', 'md'）
+        source: ソース識別子（通常はファイルパス文字列）
+        timestamp: 作成/追加タイムスタンプ
+        metadata: 追加のメタデータ辞書
     """
     file_path: Path
     name: str
@@ -36,27 +36,27 @@ class Document:
 
     @property
     def size(self) -> int:
-        """Returns the character count of the document content."""
+        """ドキュメントコンテンツの文字数を返す。"""
         return len(self.content)
 
     def __post_init__(self):
-        """Ensure file_path is a Path object."""
+        """file_pathがPathオブジェクトであることを保証する。"""
         if not isinstance(self.file_path, Path):
             self.file_path = Path(self.file_path)
 
 
 @dataclass
 class Chunk:
-    """Represents a split text chunk with metadata.
+    """メタデータを含む分割されたテキストチャンクを表現する。
 
     Attributes:
-        content: Text content of the chunk
-        chunk_id: Unique identifier for the chunk
-        document_id: Reference to parent document
-        chunk_index: Index of this chunk in the document (0-based)
-        start_char: Starting character position in original document
-        end_char: Ending character position in original document
-        metadata: Metadata from parent document plus chunk-specific info
+        content: チャンクのテキストコンテンツ
+        chunk_id: チャンクの一意識別子
+        document_id: 親ドキュメントへの参照
+        chunk_index: ドキュメント内のこのチャンクのインデックス（0始まり）
+        start_char: 元のドキュメント内の開始文字位置
+        end_char: 元のドキュメント内の終了文字位置
+        metadata: 親ドキュメントのメタデータとチャンク固有の情報
     """
     content: str
     chunk_id: str
@@ -68,11 +68,11 @@ class Chunk:
 
     @property
     def size(self) -> int:
-        """Returns the character count of the chunk content."""
+        """チャンクコンテンツの文字数を返す。"""
         return len(self.content)
 
     def __post_init__(self):
-        """Add chunk-specific metadata."""
+        """チャンク固有のメタデータを追加する。"""
         self.metadata.update({
             'chunk_id': self.chunk_id,
             'document_id': self.document_id,
@@ -85,15 +85,15 @@ class Chunk:
 
 @dataclass
 class SearchResult:
-    """Represents a search result with similarity score.
+    """類似度スコアを含む検索結果を表現する。
 
     Attributes:
-        chunk: The matched text chunk
-        score: Similarity score (typically cosine similarity, 0-1 range)
-        document_name: Name of the source document
-        document_source: Source path/identifier of the document
-        rank: Ranking position in search results (1-based)
-        metadata: Additional metadata from the chunk
+        chunk: マッチしたテキストチャンク
+        score: 類似度スコア（通常はコサイン類似度、0-1の範囲）
+        document_name: ソースドキュメントの名前
+        document_source: ドキュメントのソースパス/識別子
+        rank: 検索結果内のランキング位置（1始まり）
+        metadata: チャンクからの追加メタデータ
     """
     chunk: Chunk
     score: float
@@ -103,20 +103,20 @@ class SearchResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Ensure score is within valid range."""
+        """スコアが有効な範囲内であることを保証する。"""
         if not 0 <= self.score <= 1:
             raise ValueError(f"Score must be between 0 and 1, got {self.score}")
 
 
 @dataclass
 class ChatMessage:
-    """Represents a chat message in conversation history.
+    """会話履歴内のチャットメッセージを表現する。
 
     Attributes:
-        role: Message role ('user', 'assistant', or 'system')
-        content: Message content text
-        timestamp: Message timestamp
-        metadata: Additional metadata (e.g., model used, tokens, context)
+        role: メッセージの役割（'user', 'assistant', または 'system'）
+        content: メッセージコンテンツのテキスト
+        timestamp: メッセージのタイムスタンプ
+        metadata: 追加のメタデータ（例: 使用モデル、トークン数、コンテキスト）
     """
     role: str
     content: str
@@ -124,7 +124,7 @@ class ChatMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Validate role."""
+        """役割を検証する。"""
         valid_roles = {'user', 'assistant', 'system'}
         if self.role not in valid_roles:
             raise ValueError(
@@ -132,10 +132,10 @@ class ChatMessage:
             )
 
     def to_dict(self) -> dict[str, str]:
-        """Convert to dictionary format for LLM APIs.
+        """LLM API用の辞書形式に変換する。
 
         Returns:
-            Dictionary with 'role' and 'content' keys
+            'role'と'content'キーを含む辞書
         """
         return {
             'role': self.role,
@@ -145,22 +145,22 @@ class ChatMessage:
 
 @dataclass
 class ChatHistory:
-    """Manages conversation history for chat mode.
+    """チャットモード用の会話履歴を管理する。
 
     Attributes:
-        messages: List of chat messages
-        max_messages: Maximum number of messages to keep (None = unlimited)
+        messages: チャットメッセージのリスト
+        max_messages: 保持する最大メッセージ数（None = 無制限）
     """
     messages: list[ChatMessage] = field(default_factory=list)
     max_messages: int | None = None
 
     def add_message(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
-        """Add a new message to history.
+        """履歴に新しいメッセージを追加する。
 
         Args:
-            role: Message role ('user', 'assistant', or 'system')
-            content: Message content
-            metadata: Optional metadata dictionary
+            role: メッセージの役割（'user', 'assistant', または 'system'）
+            content: メッセージコンテンツ
+            metadata: オプションのメタデータ辞書
         """
         message = ChatMessage(
             role=role,
@@ -169,22 +169,22 @@ class ChatHistory:
         )
         self.messages.append(message)
 
-        # Trim history if max_messages is set
+        # max_messagesが設定されている場合は履歴を削減
         if self.max_messages and len(self.messages) > self.max_messages:
             self.messages = self.messages[-self.max_messages:]
 
     def to_dicts(self) -> list[dict[str, str]]:
-        """Convert all messages to dictionary format for LLM APIs.
+        """すべてのメッセージをLLM API用の辞書形式に変換する。
 
         Returns:
-            List of dictionaries with 'role' and 'content' keys
+            'role'と'content'キーを含む辞書のリスト
         """
         return [msg.to_dict() for msg in self.messages]
 
     def clear(self) -> None:
-        """Clear all messages from history."""
+        """履歴からすべてのメッセージをクリアする。"""
         self.messages.clear()
 
     def __len__(self) -> int:
-        """Return number of messages in history."""
+        """履歴内のメッセージ数を返す。"""
         return len(self.messages)

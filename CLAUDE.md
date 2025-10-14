@@ -111,6 +111,13 @@ Current state: Empty `main.py` placeholder exists. All `src/` modules need to be
 
 ## Development Guidelines
 
+### Code Style and Documentation
+- **All comments and docstrings must be written in Japanese**
+- Use Python 3.13+ type hints (e.g., `dict[str, Any]` instead of `Dict[str, Any]`)
+- Follow Google-style docstrings format with Japanese text
+- Module docstrings should describe the purpose and main components
+- Class/function docstrings should include Japanese descriptions of attributes, parameters, and return values
+
 ### When Adding New Commands
 1. Implement command logic in appropriate `src/commands/*.py` file
 2. Register command in `src/cli.py` Click group
