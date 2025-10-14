@@ -187,8 +187,8 @@ Python + Ollama + LangChain + ChromaDBを使用したRAG（Retrieval-Augmented G
   - langchain, langchain-community, langchain-ollama
   - chromadb
   - click, rich, python-dotenv
-- [ ] Ollamaのインストール・起動
-- [ ] 必要なモデルのダウンロード
+- [x] Ollamaのインストール・起動
+- [x] 必要なモデルのダウンロード
   - `ollama pull llama3.2`
   - `ollama pull nomic-embed-text`
 
