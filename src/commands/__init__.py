@@ -9,10 +9,14 @@ Modules:
 """
 
 from .document import add_command, remove_command, list_command, clear_command
+from .query import query, search, chat
 
 __all__ = [
     'add_command',
     'remove_command',
     'list_command',
     'clear_command',
+    'query',
+    'search',
+    'chat',
 ]
