@@ -771,3 +771,190 @@ class TestRAGEngineGenerateAnswer:
             error_message = str(exc_info.value)
             assert "回答の生成に失敗しました" in error_message
             assert "LLM invocation failed" in error_message
+
+
+class TestRAGEngineQuery:
+    """RAGEngine - 統合クエリのテスト"""
+
+    def test_query_executes_retrieve_and_generate_answer(self):
+        """query()で検索と回答生成が一度に実行される（モック）"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # 検索結果のモック
+        mock_chunk = Chunk(
+            content="Pythonは汎用プログラミング言語です。",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=20,
+            metadata={"source": "python.txt"}
+        )
+        mock_search_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="python.txt",
+                document_source="/path/to/python.txt",
+                rank=1
+            )
+        ]
+
+        # 埋め込みベクトルのモック
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = mock_search_results
+
+        # LLMの回答
+        mock_llm.invoke.return_value = "Pythonは汎用プログラミング言語です。"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 統合クエリを実行
+            question = "Pythonとは何ですか？"
+            result = engine.query(question)
+
+            # 結果の検証
+            assert result["answer"] == "Pythonは汎用プログラミング言語です。"
+            assert result["context_count"] == 1
+            assert "sources" in result
+            assert len(result["sources"]) == 1
+
+            # retrieveが実行されたことを確認（embed_queryとsearchが呼ばれた）
+            mock_embedding_generator.embed_query.assert_called_once_with(question)
+            mock_vector_store.search.assert_called_once_with(
+                query_embedding=mock_query_embedding,
+                n_results=5,
+                where=None
+            )
+
+            # generate_answerが実行されたことを確認（LLMが呼ばれた）
+            mock_llm.invoke.assert_called_once()
+
+    def test_query_passes_parameters_to_retrieve(self):
+        """query()のパラメータがretrieve()に正しく渡される"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # カスタムパラメータでクエリを実行
+            question = "テスト質問"
+            n_results = 10
+            where = {"document_id": "doc123"}
+
+            result = engine.query(
+                question=question,
+                n_results=n_results,
+                where=where,
+                include_sources=False
+            )
+
+            # retrieveにパラメータが渡されたことを確認
+            mock_vector_store.search.assert_called_once_with(
+                query_embedding=mock_query_embedding,
+                n_results=n_results,
+                where=where
+            )
+
+            # include_sources=Falseが機能していることを確認
+            assert "sources" not in result
+
+    def test_query_handles_retrieve_error(self):
+        """query()でretrieve()がエラーを起こした場合の処理"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # embed_queryでエラーを発生させる
+        mock_embedding_generator.embed_query.side_effect = Exception("Embedding error")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.query("質問")
+
+            # retrieveのエラーメッセージが含まれることを確認
+            error_message = str(exc_info.value)
+            assert "ドキュメントの検索に失敗しました" in error_message
+            assert "Embedding error" in error_message
+
+            # LLMが呼ばれていないことを確認（retrieveで失敗したため）
+            mock_llm.invoke.assert_not_called()
+
+    def test_query_handles_generate_answer_error(self):
+        """query()でgenerate_answer()がエラーを起こした場合の処理"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # retrieveは成功するが、generate_answerで失敗
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.side_effect = Exception("LLM error")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.query("質問")
+
+            # generate_answerのエラーメッセージが含まれることを確認
+            error_message = str(exc_info.value)
+            assert "回答の生成に失敗しました" in error_message
+            assert "LLM error" in error_message
+
+            # retrieveは実行されたことを確認
+            mock_embedding_generator.embed_query.assert_called_once()
+            mock_vector_store.search.assert_called_once()
