@@ -481,3 +481,100 @@ class TestDocumentProcessorChunkCreation:
             assert 'start_char' in chunk.metadata
             assert 'end_char' in chunk.metadata
             assert 'size' in chunk.metadata
+
+
+@pytest.mark.unit
+class TestDocumentProcessorIntegration:
+    """DocumentProcessor - 統合メソッドのテスト（3.5）。"""
+
+    def test_process_document_returns_document_and_chunks(self, processor, sample_txt_file):
+        """process_document()でDocumentとChunkが一度に取得できる。"""
+        # ファイルからドキュメントを処理
+        document, chunks = processor.process_document(sample_txt_file)
+
+        # Documentオブジェクトの検証
+        assert isinstance(document, Document)
+        assert document.name == "sample.txt"
+        assert document.doc_type == "txt"
+        assert len(document.content) > 0
+
+        # Chunksリストの検証
+        from src.models.document import Chunk
+        assert isinstance(chunks, list)
+        assert len(chunks) > 0
+        for chunk in chunks:
+            assert isinstance(chunk, Chunk)
+
+    def test_process_document_with_custom_document_id(self, processor, sample_txt_file):
+        """process_document()でカスタムdocument_idが使用できる。"""
+        custom_doc_id = "custom_test_doc_99999999"
+        document, chunks = processor.process_document(
+            sample_txt_file,
+            document_id=custom_doc_id
+        )
+
+        # すべてのチャンクがカスタムdocument_idを持つことを確認
+        for chunk in chunks:
+            assert chunk.document_id == custom_doc_id
+            assert custom_doc_id in chunk.chunk_id
+
+    def test_process_document_auto_generates_document_id(self, processor, sample_txt_file):
+        """process_document()でdocument_idが自動生成される。"""
+        document, chunks = processor.process_document(sample_txt_file)
+
+        # document_idが自動生成されていることを確認
+        assert len(chunks) > 0
+        first_chunk = chunks[0]
+        assert first_chunk.document_id is not None
+
+        # すべてのチャンクが同じdocument_idを持つことを確認
+        for chunk in chunks:
+            assert chunk.document_id == first_chunk.document_id
+
+    def test_process_document_with_md_file(self, processor, sample_md_file):
+        """process_document()でMDファイルも処理できる。"""
+        document, chunks = processor.process_document(sample_md_file)
+
+        # ドキュメントの検証
+        assert document.name == "sample.md"
+        assert document.doc_type == "md"
+        assert "# サンプルMarkdown" in document.content
+
+        # チャンクの検証
+        assert len(chunks) > 0
+
+    def test_process_document_chunks_contain_document_metadata(
+        self, processor, sample_txt_file
+    ):
+        """process_document()で作成されたチャンクがドキュメントのメタデータを含む。"""
+        document, chunks = processor.process_document(sample_txt_file)
+
+        # 各チャンクにドキュメント情報が含まれていることを確認
+        for chunk in chunks:
+            assert chunk.metadata['document_name'] == document.name
+            assert chunk.metadata['document_source'] == document.source
+            assert chunk.metadata['document_type'] == document.doc_type
+            # ドキュメントのメタデータが継承されている
+            assert 'file_size' in chunk.metadata
+            assert 'encoding' in chunk.metadata
+
+    def test_process_document_with_nonexistent_file_raises_error(self, processor):
+        """process_document()で存在しないファイルを指定するとエラーが発生する。"""
+        nonexistent_file = Path("/path/to/nonexistent/file.txt")
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.process_document(nonexistent_file)
+
+        assert "ファイルが見つかりません" in str(exc_info.value)
+
+    def test_process_document_with_unsupported_file_raises_error(
+        self, processor, tmp_path
+    ):
+        """process_document()でサポート外のファイル形式を指定するとエラーが発生する。"""
+        unsupported_file = tmp_path / "test.docx"
+        unsupported_file.write_text("test content")
+
+        with pytest.raises(UnsupportedFileTypeError) as exc_info:
+            processor.process_document(unsupported_file)
+
+        assert "サポートされていないファイル形式" in str(exc_info.value)
