@@ -493,3 +493,174 @@ class TestChatMessage:
 
         assert message.content == ""
         assert message.role == "user"
+
+
+class TestChatHistory:
+    """ChatHistoryクラスのテスト。"""
+
+    def test_create_chat_history_with_default_values(self):
+        """正常なChatHistoryインスタンスの作成。"""
+        history = ChatHistory()
+
+        assert isinstance(history.messages, list)
+        assert len(history.messages) == 0
+        assert history.max_messages is None
+
+    def test_add_message_adds_to_history(self):
+        """add_message()でメッセージが追加されることを確認。"""
+        history = ChatHistory()
+
+        history.add_message(role="user", content="こんにちは")
+        history.add_message(role="assistant", content="こんにちは！何をお手伝いしましょうか？")
+
+        assert len(history.messages) == 2
+        assert history.messages[0].role == "user"
+        assert history.messages[0].content == "こんにちは"
+        assert history.messages[1].role == "assistant"
+        assert history.messages[1].content == "こんにちは！何をお手伝いしましょうか？"
+
+    def test_max_messages_limits_history(self):
+        """max_messagesによる履歴制限が機能することを確認。"""
+        history = ChatHistory(max_messages=3)
+
+        # 5つのメッセージを追加
+        history.add_message(role="user", content="メッセージ1")
+        history.add_message(role="assistant", content="メッセージ2")
+        history.add_message(role="user", content="メッセージ3")
+        history.add_message(role="assistant", content="メッセージ4")
+        history.add_message(role="user", content="メッセージ5")
+
+        # 最大3件のみ保持される（最新のメッセージ）
+        assert len(history.messages) == 3
+        assert history.messages[0].content == "メッセージ3"
+        assert history.messages[1].content == "メッセージ4"
+        assert history.messages[2].content == "メッセージ5"
+
+    def test_to_dicts_converts_all_messages(self):
+        """to_dicts()で全メッセージが辞書リストに変換されることを確認。"""
+        history = ChatHistory()
+
+        history.add_message(role="user", content="質問です")
+        history.add_message(role="assistant", content="回答です")
+        history.add_message(role="system", content="システムメッセージ")
+
+        result = history.to_dicts()
+
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result[0] == {'role': 'user', 'content': '質問です'}
+        assert result[1] == {'role': 'assistant', 'content': '回答です'}
+        assert result[2] == {'role': 'system', 'content': 'システムメッセージ'}
+
+    def test_clear_removes_all_messages(self):
+        """clear()で履歴がクリアされることを確認。"""
+        history = ChatHistory()
+
+        # メッセージを追加
+        history.add_message(role="user", content="テスト1")
+        history.add_message(role="assistant", content="テスト2")
+        assert len(history.messages) == 2
+
+        # クリア
+        history.clear()
+
+        assert len(history.messages) == 0
+        assert history.messages == []
+
+    def test_len_returns_message_count(self):
+        """__len__でメッセージ数が正しく返されることを確認。"""
+        history = ChatHistory()
+
+        assert len(history) == 0
+
+        history.add_message(role="user", content="メッセージ1")
+        assert len(history) == 1
+
+        history.add_message(role="assistant", content="メッセージ2")
+        assert len(history) == 2
+
+        history.add_message(role="user", content="メッセージ3")
+        assert len(history) == 3
+
+    def test_add_message_with_metadata(self):
+        """add_message()でメタデータ付きメッセージが追加されることを確認。"""
+        history = ChatHistory()
+        metadata = {"model": "llama3.2", "tokens": 100}
+
+        history.add_message(
+            role="assistant",
+            content="メタデータ付き回答",
+            metadata=metadata
+        )
+
+        assert len(history.messages) == 1
+        assert history.messages[0].metadata == metadata
+        assert history.messages[0].metadata["model"] == "llama3.2"
+
+    def test_add_message_without_metadata(self):
+        """add_message()でメタデータなしでメッセージが追加されることを確認。"""
+        history = ChatHistory()
+
+        history.add_message(role="user", content="メタデータなし")
+
+        assert len(history.messages) == 1
+        assert history.messages[0].metadata == {}
+
+    def test_max_messages_with_exact_limit(self):
+        """max_messagesちょうどの数のメッセージが正しく保持されることを確認。"""
+        history = ChatHistory(max_messages=2)
+
+        history.add_message(role="user", content="メッセージ1")
+        history.add_message(role="assistant", content="メッセージ2")
+
+        # ちょうど2件なので全て保持される
+        assert len(history.messages) == 2
+        assert history.messages[0].content == "メッセージ1"
+        assert history.messages[1].content == "メッセージ2"
+
+        # 3件目を追加すると古いものが削除される
+        history.add_message(role="user", content="メッセージ3")
+        assert len(history.messages) == 2
+        assert history.messages[0].content == "メッセージ2"
+        assert history.messages[1].content == "メッセージ3"
+
+    def test_to_dicts_returns_empty_list_for_empty_history(self):
+        """空の履歴でto_dicts()が空リストを返すことを確認。"""
+        history = ChatHistory()
+
+        result = history.to_dicts()
+
+        assert isinstance(result, list)
+        assert len(result) == 0
+        assert result == []
+
+    def test_add_message_preserves_timestamp(self):
+        """add_message()でタイムスタンプが保持されることを確認。"""
+        history = ChatHistory()
+
+        before = datetime.now()
+        history.add_message(role="user", content="タイムスタンプテスト")
+        after = datetime.now()
+
+        assert len(history.messages) == 1
+        assert before <= history.messages[0].timestamp <= after
+
+    def test_initialize_with_max_messages(self):
+        """max_messagesを指定してインスタンス化できることを確認。"""
+        history = ChatHistory(max_messages=5)
+
+        assert history.max_messages == 5
+        assert len(history.messages) == 0
+
+    def test_max_messages_with_large_number(self):
+        """大きなmax_messages値で正しく動作することを確認。"""
+        history = ChatHistory(max_messages=100)
+
+        # 10件のメッセージを追加
+        for i in range(10):
+            history.add_message(role="user", content=f"メッセージ{i+1}")
+
+        # max_messages(100)より少ないので全て保持される
+        assert len(history.messages) == 10
+        assert history.messages[0].content == "メッセージ1"
+        assert history.messages[9].content == "メッセージ10"
