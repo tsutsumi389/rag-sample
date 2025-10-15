@@ -243,3 +243,115 @@ class TestChunk:
 
         assert chunk.size == 0
         assert chunk.metadata['size'] == 0
+
+
+class TestSearchResult:
+    """SearchResultクラスのテスト。"""
+
+    def test_create_search_result_with_valid_data(self):
+        """正常なSearchResultインスタンスの作成。"""
+        chunk = Chunk(
+            content="検索結果のテストチャンク",
+            chunk_id="doc_search_chunk_0001",
+            document_id="doc_search",
+            chunk_index=0,
+            start_char=0,
+            end_char=12
+        )
+
+        result = SearchResult(
+            chunk=chunk,
+            score=0.85,
+            document_name="test_document.txt",
+            document_source="/path/to/test_document.txt",
+            rank=1
+        )
+
+        assert result.chunk == chunk
+        assert result.score == 0.85
+        assert result.document_name == "test_document.txt"
+        assert result.document_source == "/path/to/test_document.txt"
+        assert result.rank == 1
+        assert isinstance(result.metadata, dict)
+
+    def test_score_validation_raises_error_for_negative_score(self):
+        """scoreが0未満の場合にValueErrorがraiseされることを確認。"""
+        chunk = Chunk(
+            content="テストチャンク",
+            chunk_id="doc_invalid_chunk_0001",
+            document_id="doc_invalid",
+            chunk_index=0,
+            start_char=0,
+            end_char=7
+        )
+
+        with pytest.raises(ValueError, match="Score must be between 0 and 1"):
+            SearchResult(
+                chunk=chunk,
+                score=-0.1,  # 負のスコア
+                document_name="test.txt",
+                document_source="/path/to/test.txt"
+            )
+
+    def test_score_validation_raises_error_for_score_above_one(self):
+        """scoreが1より大きい場合にValueErrorがraiseされることを確認。"""
+        chunk = Chunk(
+            content="テストチャンク",
+            chunk_id="doc_invalid2_chunk_0001",
+            document_id="doc_invalid2",
+            chunk_index=0,
+            start_char=0,
+            end_char=7
+        )
+
+        with pytest.raises(ValueError, match="Score must be between 0 and 1"):
+            SearchResult(
+                chunk=chunk,
+                score=1.5,  # 1より大きいスコア
+                document_name="test.txt",
+                document_source="/path/to/test.txt"
+            )
+
+    def test_boundary_value_score_zero(self):
+        """境界値テスト: score=0が正常に動作することを確認。"""
+        chunk = Chunk(
+            content="スコア0のチャンク",
+            chunk_id="doc_zero_chunk_0001",
+            document_id="doc_zero",
+            chunk_index=0,
+            start_char=0,
+            end_char=8
+        )
+
+        result = SearchResult(
+            chunk=chunk,
+            score=0.0,  # 最小値
+            document_name="test.txt",
+            document_source="/path/to/test.txt",
+            rank=5
+        )
+
+        assert result.score == 0.0
+        assert result.rank == 5
+
+    def test_boundary_value_score_one(self):
+        """境界値テスト: score=1が正常に動作することを確認。"""
+        chunk = Chunk(
+            content="スコア1のチャンク",
+            chunk_id="doc_one_chunk_0001",
+            document_id="doc_one",
+            chunk_index=0,
+            start_char=0,
+            end_char=8
+        )
+
+        result = SearchResult(
+            chunk=chunk,
+            score=1.0,  # 最大値
+            document_name="test.txt",
+            document_source="/path/to/test.txt",
+            rank=1
+        )
+
+        assert result.score == 1.0
+        assert result.rank == 1
