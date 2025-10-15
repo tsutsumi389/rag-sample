@@ -360,3 +360,124 @@ class TestDocumentProcessorTextSplitting:
         # 改行が考慮されていることを確認
         for chunk in chunks:
             assert len(chunk) > 0
+
+
+@pytest.mark.unit
+class TestDocumentProcessorChunkCreation:
+    """DocumentProcessor - チャンク作成のテスト（3.4）。"""
+
+    def test_create_chunks_returns_chunk_list(self, processor, sample_txt_file):
+        """create_chunks()で正しいChunkリストが作成される。"""
+        # ドキュメントを読み込む
+        document = processor.load_document(sample_txt_file)
+
+        # チャンクを作成
+        chunks = processor.create_chunks(document)
+
+        # 基本的なアサーション
+        assert isinstance(chunks, list)
+        assert len(chunks) > 0
+
+        # すべての要素がChunkインスタンスであることを確認
+        from src.models.document import Chunk
+        for chunk in chunks:
+            assert isinstance(chunk, Chunk)
+
+    def test_create_chunks_generates_correct_chunk_ids(self, processor, sample_txt_file):
+        """chunk_idが正しく生成される（document_id_chunk_XXXX）。"""
+        # ドキュメントを読み込む
+        document = processor.load_document(sample_txt_file)
+
+        # カスタムdocument_idでチャンクを作成
+        document_id = "test_doc_12345678"
+        chunks = processor.create_chunks(document, document_id=document_id)
+
+        # chunk_idの形式を検証
+        for i, chunk in enumerate(chunks):
+            expected_chunk_id = f"{document_id}_chunk_{i:04d}"
+            assert chunk.chunk_id == expected_chunk_id
+            # 例: test_doc_12345678_chunk_0000, test_doc_12345678_chunk_0001, ...
+
+    def test_create_chunks_auto_generates_document_id(self, processor, sample_txt_file):
+        """document_idが省略時に自動生成される。"""
+        # ドキュメントを読み込む
+        document = processor.load_document(sample_txt_file)
+
+        # document_idを省略してチャンクを作成
+        chunks = processor.create_chunks(document)
+
+        # document_idが自動生成されていることを確認
+        assert len(chunks) > 0
+        first_chunk = chunks[0]
+
+        # document_idがchunk_idに含まれていることを確認
+        assert "_chunk_" in first_chunk.chunk_id
+        assert first_chunk.document_id is not None
+        assert len(first_chunk.document_id) > 0
+
+        # すべてのチャンクが同じdocument_idを持つことを確認
+        for chunk in chunks:
+            assert chunk.document_id == first_chunk.document_id
+
+    def test_create_chunks_sets_start_and_end_char(self, processor):
+        """start_char/end_charが正しく設定される。"""
+        # シンプルなドキュメントを作成
+        from src.models.document import Document
+        from datetime import datetime
+
+        content = "あいうえお。かきくけこ。さしすせそ。"
+        document = Document(
+            file_path=Path("/tmp/test.txt"),
+            name="test.txt",
+            content=content,
+            doc_type="txt",
+            source="/tmp/test.txt",
+            timestamp=datetime.now(),
+        )
+
+        # チャンクを作成
+        chunks = processor.create_chunks(document)
+
+        # start_char/end_charが正しく設定されていることを確認
+        for chunk in chunks:
+            # start_charとend_charが有効な範囲内
+            assert 0 <= chunk.start_char < len(content)
+            assert chunk.start_char < chunk.end_char <= len(content)
+
+            # contentが元のドキュメントの一部と一致する
+            # （完全一致しない場合もあるが、少なくともstart_char位置から始まる）
+            assert chunk.content in document.content
+
+    def test_create_chunks_inherits_document_metadata(self, processor, sample_txt_file):
+        """メタデータがドキュメントから継承される。"""
+        # ドキュメントを読み込む
+        document = processor.load_document(sample_txt_file)
+
+        # チャンクを作成
+        chunks = processor.create_chunks(document)
+
+        # 各チャンクのメタデータを検証
+        for chunk in chunks:
+            # ドキュメントのメタデータが継承されていることを確認
+            assert 'file_size' in chunk.metadata
+            assert 'file_modified' in chunk.metadata
+            assert 'encoding' in chunk.metadata
+
+            # チャンク固有のメタデータが追加されていることを確認
+            assert 'document_name' in chunk.metadata
+            assert 'document_source' in chunk.metadata
+            assert 'document_type' in chunk.metadata
+            assert 'timestamp' in chunk.metadata
+
+            # ドキュメント情報が正しいことを確認
+            assert chunk.metadata['document_name'] == document.name
+            assert chunk.metadata['document_source'] == document.source
+            assert chunk.metadata['document_type'] == document.doc_type
+
+            # __post_init__で追加されるメタデータ
+            assert 'chunk_id' in chunk.metadata
+            assert 'document_id' in chunk.metadata
+            assert 'chunk_index' in chunk.metadata
+            assert 'start_char' in chunk.metadata
+            assert 'end_char' in chunk.metadata
+            assert 'size' in chunk.metadata
