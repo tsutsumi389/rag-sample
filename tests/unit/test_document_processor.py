@@ -156,3 +156,94 @@ class TestDocumentProcessorFileSupport:
         assert isinstance(document, Document)
         assert document.name == "sample.txt"
         assert isinstance(document.file_path, Path)
+
+
+@pytest.mark.unit
+class TestDocumentProcessorErrorHandling:
+    """DocumentProcessor - エラーハンドリングのテスト（3.2）。"""
+
+    def test_load_nonexistent_file_raises_error(self, processor):
+        """存在しないファイルでDocumentProcessorErrorがraiseされる。"""
+        nonexistent_file = Path("/path/to/nonexistent/file.txt")
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.load_document(nonexistent_file)
+
+        assert "ファイルが見つかりません" in str(exc_info.value)
+
+    def test_load_directory_raises_error(self, processor, tmp_path):
+        """ディレクトリパスでDocumentProcessorErrorがraiseされる。"""
+        # ディレクトリを作成
+        directory = tmp_path / "test_dir"
+        directory.mkdir()
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.load_document(directory)
+
+        assert "ディレクトリではなくファイルを指定してください" in str(exc_info.value)
+
+    def test_load_empty_txt_file_raises_error(self, processor, tmp_path):
+        """空のTXTファイルでDocumentProcessorErrorがraiseされる。"""
+        # 空ファイルを作成
+        empty_file = tmp_path / "empty.txt"
+        empty_file.write_text("")
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.load_document(empty_file)
+
+        assert "ファイルが空です" in str(exc_info.value)
+
+    def test_load_empty_md_file_raises_error(self, processor, tmp_path):
+        """空のMDファイルでDocumentProcessorErrorがraiseされる。"""
+        # 空ファイルを作成（スペースのみ）
+        empty_file = tmp_path / "empty.md"
+        empty_file.write_text("   \n\n   ")
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.load_document(empty_file)
+
+        assert "ファイルが空です" in str(exc_info.value)
+
+    def test_load_empty_pdf_raises_error(self, processor, tmp_path):
+        """空のPDFファイルでDocumentProcessorErrorがraiseされる。"""
+        # 空のPDFファイル（テキスト抽出できない）をモック
+        empty_pdf = tmp_path / "empty.pdf"
+        empty_pdf.write_bytes(b"%PDF-1.4 fake pdf")
+
+        # PyPDF2のモック：空のテキストを返す
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = "   "
+
+        mock_reader = MagicMock()
+        mock_reader.pages = [mock_page]
+
+        with patch("PyPDF2.PdfReader", return_value=mock_reader):
+            with pytest.raises(DocumentProcessorError) as exc_info:
+                processor.load_document(empty_pdf)
+
+        assert "PDFからテキストを抽出できませんでした" in str(exc_info.value)
+
+    def test_load_invalid_encoding_utf8_fallback_to_shift_jis(self, processor, tmp_path):
+        """不正なエンコーディングのファイルでShift_JISフォールバックが動作する。"""
+        # Shift_JISでエンコードされたファイルを作成
+        sjis_file = tmp_path / "sjis.txt"
+        sjis_content = "これはShift_JISエンコーディングのファイルです。"
+        sjis_file.write_bytes(sjis_content.encode('shift_jis'))
+
+        # ファイルの読み込み（UTF-8で失敗 → Shift_JISで成功）
+        document = processor.load_document(sjis_file)
+
+        assert isinstance(document, Document)
+        assert sjis_content in document.content
+
+    def test_load_invalid_encoding_both_fail_raises_error(self, processor, tmp_path):
+        """UTF-8とShift_JIS両方で読めないファイルでDocumentProcessorErrorがraiseされる。"""
+        # 不正なエンコーディングのファイルを作成
+        invalid_file = tmp_path / "invalid.txt"
+        # Latin-1でエンコードした特殊文字（UTF-8/Shift_JISで読めない）
+        invalid_file.write_bytes(b'\xff\xfe\x00Invalid encoding')
+
+        with pytest.raises(DocumentProcessorError) as exc_info:
+            processor.load_document(invalid_file)
+
+        assert "エンコーディングを認識できません" in str(exc_info.value)
