@@ -244,9 +244,9 @@ tests/
 #### テスト項目
 
 ##### 6.1 RAGEngine - 初期化
-- ✓ デフォルト設定での初期化（モック）
-- ✓ カスタムvector_store/embedding_generatorでの初期化
-- ✓ LLM初期化失敗時にRAGEngineErrorがraise（モック）
+- ✅ デフォルト設定での初期化（モック）
+- ✅ カスタムvector_store/embedding_generatorでの初期化
+- ✅ LLM初期化失敗時にRAGEngineErrorがraise（モック）
 
 ##### 6.2 RAGEngine - 検索
 - ✓ retrieve()で正しいSearchResultリストが返される（モック）
