@@ -254,11 +254,11 @@ tests/
 - ✅ n_results/whereパラメータが正しく渡される（モック）
 
 ##### 6.3 RAGEngine - 回答生成
-- ✓ generate_answer()で正しい回答辞書が返される（モック）
-- ✓ 空の質問でRAGEngineErrorがraise
-- ✓ コンテキストが空の場合の処理
-- ✓ include_sources=Trueで情報源が含まれる
-- ✓ プロンプトテンプレートのカスタマイズが機能する
+- ✅ generate_answer()で正しい回答辞書が返される（モック）
+- ✅ 空の質問でRAGEngineErrorがraise
+- ✅ コンテキストが空の場合の処理
+- ✅ include_sources=Trueで情報源が含まれる
+- ✅ プロンプトテンプレートのカスタマイズが機能する
 
 ##### 6.4 RAGEngine - 統合クエリ
 - ✓ query()で検索と回答生成が一度に実行される（モック）

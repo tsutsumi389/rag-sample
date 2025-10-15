@@ -441,3 +441,333 @@ class TestRAGEngineRetrieve:
             error_message = str(exc_info.value)
             assert "ドキュメントの検索に失敗しました" in error_message
             assert "Vector store search failed" in error_message
+
+
+class TestRAGEngineGenerateAnswer:
+    """RAGEngine - 回答生成のテスト"""
+
+    def test_generate_answer_returns_answer_dict(self):
+        """generate_answer()で正しい回答辞書が返される（モック）"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.return_value = "これはテスト回答です。"
+
+        # 検索結果のモックデータ
+        mock_chunk = Chunk(
+            content="Pythonは高レベルプログラミング言語です。",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=26,
+            metadata={"source": "python.txt"}
+        )
+        context_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="python.txt",
+                document_source="/path/to/python.txt",
+                rank=1
+            )
+        ]
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # 回答生成
+            question = "Pythonとは何ですか？"
+            result = engine.generate_answer(question, context_results)
+
+            # 結果の検証
+            assert result["answer"] == "これはテスト回答です。"
+            assert result["context_count"] == 1
+            assert "sources" in result
+            assert len(result["sources"]) == 1
+            assert result["sources"][0]["name"] == "python.txt"
+            assert result["sources"][0]["source"] == "/path/to/python.txt"
+            assert result["sources"][0]["score"] == 0.95
+
+            # LLMが呼ばれたことを確認
+            mock_llm.invoke.assert_called_once()
+            call_args = mock_llm.invoke.call_args[0][0]
+            assert "Pythonは高レベルプログラミング言語です。" in call_args
+            assert "Pythonとは何ですか？" in call_args
+
+    def test_generate_answer_with_empty_question_raises_error(self):
+        """空の質問でRAGEngineErrorがraise"""
+        # モックの準備
+        mock_llm = Mock()
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # 空の質問でエラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.generate_answer("", [])
+
+            assert "質問が空です" in str(exc_info.value)
+
+            # 空白のみの質問でもエラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.generate_answer("   ", [])
+
+            assert "質問が空です" in str(exc_info.value)
+
+            # LLMが呼ばれていないことを確認
+            mock_llm.invoke.assert_not_called()
+
+    def test_generate_answer_with_empty_context(self):
+        """コンテキストが空の場合の処理"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.return_value = "提供された情報では回答できません。"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # 空のコンテキストで回答生成
+            question = "テスト質問"
+            result = engine.generate_answer(question, [])
+
+            # 結果の検証
+            assert result["answer"] == "提供された情報では回答できません。"
+            assert result["context_count"] == 0
+            assert "sources" not in result  # 空のコンテキストなので情報源なし
+
+            # LLMが呼ばれたことを確認
+            mock_llm.invoke.assert_called_once()
+            call_args = mock_llm.invoke.call_args[0][0]
+            assert "関連する情報が見つかりませんでした。" in call_args
+            assert "テスト質問" in call_args
+
+    def test_generate_answer_with_include_sources_true(self):
+        """include_sources=Trueで情報源が含まれる"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.return_value = "テスト回答"
+
+        # 複数の検索結果（同じドキュメントと異なるドキュメント）
+        mock_chunk1 = Chunk(
+            content="コンテンツ1",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=6,
+            metadata={"source": "doc1.txt"}
+        )
+        mock_chunk2 = Chunk(
+            content="コンテンツ2",
+            chunk_id="chunk_002",
+            document_id="doc_001",
+            chunk_index=1,
+            start_char=6,
+            end_char=12,
+            metadata={"source": "doc1.txt"}
+        )
+        mock_chunk3 = Chunk(
+            content="コンテンツ3",
+            chunk_id="chunk_003",
+            document_id="doc_002",
+            chunk_index=0,
+            start_char=0,
+            end_char=6,
+            metadata={"source": "doc2.txt"}
+        )
+
+        context_results = [
+            SearchResult(
+                chunk=mock_chunk1,
+                score=0.95,
+                document_name="doc1.txt",
+                document_source="/path/to/doc1.txt",
+                rank=1
+            ),
+            SearchResult(
+                chunk=mock_chunk2,
+                score=0.90,
+                document_name="doc1.txt",
+                document_source="/path/to/doc1.txt",  # 同じドキュメント
+                rank=2
+            ),
+            SearchResult(
+                chunk=mock_chunk3,
+                score=0.85,
+                document_name="doc2.txt",
+                document_source="/path/to/doc2.txt",
+                rank=3
+            )
+        ]
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # include_sources=Trueで回答生成
+            result = engine.generate_answer("質問", context_results, include_sources=True)
+
+            # 結果の検証
+            assert "sources" in result
+            assert len(result["sources"]) == 2  # 重複を除いて2つのドキュメント
+
+            # ソースが正しく含まれていることを確認
+            source_names = [s["name"] for s in result["sources"]]
+            assert "doc1.txt" in source_names
+            assert "doc2.txt" in source_names
+
+    def test_generate_answer_with_include_sources_false(self):
+        """include_sources=Falseで情報源が含まれない"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.return_value = "テスト回答"
+
+        mock_chunk = Chunk(
+            content="テストコンテンツ",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=8,
+            metadata={"source": "test.txt"}
+        )
+        context_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="test.txt",
+                document_source="/path/to/test.txt",
+                rank=1
+            )
+        ]
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # include_sources=Falseで回答生成
+            result = engine.generate_answer("質問", context_results, include_sources=False)
+
+            # 結果の検証
+            assert "sources" not in result
+            assert result["answer"] == "テスト回答"
+            assert result["context_count"] == 1
+
+    def test_generate_answer_with_custom_template(self):
+        """プロンプトテンプレートのカスタマイズが機能する"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.return_value = "カスタム回答"
+
+        mock_chunk = Chunk(
+            content="テストコンテンツ",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=8,
+            metadata={"source": "test.txt"}
+        )
+        context_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="test.txt",
+                document_source="/path/to/test.txt",
+                rank=1
+            )
+        ]
+
+        # カスタムテンプレート
+        custom_template = """カスタムプロンプト:
+コンテキスト: {context}
+質問: {question}
+回答してください。"""
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # カスタムテンプレートで回答生成
+            result = engine.generate_answer(
+                "テスト質問",
+                context_results,
+                qa_template=custom_template
+            )
+
+            # 結果の検証
+            assert result["answer"] == "カスタム回答"
+
+            # カスタムテンプレートが使用されたことを確認
+            mock_llm.invoke.assert_called_once()
+            call_args = mock_llm.invoke.call_args[0][0]
+            assert "カスタムプロンプト:" in call_args
+            assert "回答してください。" in call_args
+
+    def test_generate_answer_handles_llm_error(self):
+        """LLMエラー時にRAGEngineErrorがraise"""
+        # モックの準備
+        mock_llm = Mock()
+        mock_llm.invoke.side_effect = Exception("LLM invocation failed")
+
+        mock_chunk = Chunk(
+            content="テストコンテンツ",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=8,
+            metadata={"source": "test.txt"}
+        )
+        context_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="test.txt",
+                document_source="/path/to/test.txt",
+                rank=1
+            )
+        ]
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine()
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.generate_answer("質問", context_results)
+
+            error_message = str(exc_info.value)
+            assert "回答の生成に失敗しました" in error_message
+            assert "LLM invocation failed" in error_message
