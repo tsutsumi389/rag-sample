@@ -270,13 +270,13 @@ tests/
 - ✅ max_chat_historyによる履歴制限が機能する
 
 ##### 6.6 RAGEngine - その他機能
-- ✓ clear_chat_history()で履歴がクリアされる
-- ✓ get_chat_history()で履歴が取得できる
-- ✓ get_status()でステータス情報が取得できる
-- ✓ initialize()でベクトルストアが初期化される
+- ✅ clear_chat_history()で履歴がクリアされる
+- ✅ get_chat_history()で履歴が取得できる
+- ✅ get_status()でステータス情報が取得できる
+- ✅ initialize()でベクトルストアが初期化される
 
 ##### 6.7 便利関数
-- ✓ create_rag_engine()で正しくインスタンスが作成される
+- ✅ create_rag_engine()で正しくインスタンスが作成される（6.1で実装済み）
 
 ### 7. 統合テスト（`tests/integration/`）
 

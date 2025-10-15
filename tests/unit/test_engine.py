@@ -1249,3 +1249,275 @@ class TestRAGEngineChat:
             # ユーザーメッセージは履歴に追加されているが、アシスタント応答はない
             assert len(engine.chat_history) == 1
             assert engine.chat_history.messages[0].role == "user"
+
+
+class TestRAGEngineOtherFunctions:
+    """RAGEngine - その他機能のテスト"""
+
+    def test_clear_chat_history(self):
+        """clear_chat_history()で履歴がクリアされる"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # チャットして履歴を追加
+            engine.chat("質問1")
+            engine.chat("質問2")
+            assert len(engine.chat_history) == 4  # 2往復
+
+            # 履歴をクリア
+            engine.clear_chat_history()
+
+            # 履歴が空になっていることを確認
+            assert len(engine.chat_history) == 0
+
+    def test_get_chat_history(self):
+        """get_chat_history()で履歴が取得できる"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 初期状態では空
+            history = engine.get_chat_history()
+            assert history == []
+
+            # チャットを実行
+            engine.chat("テスト質問")
+
+            # 履歴を取得
+            history = engine.get_chat_history()
+
+            # 履歴が辞書のリスト形式で返されることを確認
+            assert isinstance(history, list)
+            assert len(history) == 2  # user + assistant
+            assert isinstance(history[0], dict)
+            assert isinstance(history[1], dict)
+
+            # 履歴の内容を確認
+            assert history[0]["role"] == "user"
+            assert history[0]["content"] == "テスト質問"
+            assert history[1]["role"] == "assistant"
+            assert history[1]["content"] == "回答"
+
+    def test_get_status(self):
+        """get_status()でステータス情報が取得できる"""
+        # モックの準備
+        mock_config = Mock(spec=Config)
+        mock_config.ollama_llm_model = "llama3.2"
+        mock_config.ollama_embedding_model = "nomic-embed-text"
+        mock_config.ollama_base_url = "http://localhost:11434"
+
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # ベクトルストア情報のモック
+        mock_vector_store_info = {
+            "name": "test_collection",
+            "count": 100,
+            "metadata": {}
+        }
+        mock_vector_store.get_collection_info.return_value = mock_vector_store_info
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                config=mock_config,
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # ステータスを取得
+            status = engine.get_status()
+
+            # ステータス情報の検証
+            assert status["llm_model"] == "llama3.2"
+            assert status["embedding_model"] == "nomic-embed-text"
+            assert status["vector_store_info"] == mock_vector_store_info
+            assert status["chat_history_length"] == 0
+
+            # get_collection_infoが呼ばれたことを確認
+            mock_vector_store.get_collection_info.assert_called_once()
+
+    def test_get_status_with_vector_store_error(self):
+        """get_status()でベクトルストア情報取得時のエラー処理"""
+        # モックの準備
+        mock_config = Mock(spec=Config)
+        mock_config.ollama_llm_model = "llama3.2"
+        mock_config.ollama_embedding_model = "nomic-embed-text"
+        mock_config.ollama_base_url = "http://localhost:11434"
+
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # ベクトルストアでエラーが発生する
+        mock_vector_store.get_collection_info.side_effect = Exception("Not initialized")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                config=mock_config,
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # ステータスを取得（エラーでも例外は発生しない）
+            status = engine.get_status()
+
+            # エラー情報が含まれることを確認
+            assert "vector_store_info" in status
+            assert "error" in status["vector_store_info"]
+            assert "ベクトルストアが初期化されていません" in status["vector_store_info"]["error"]
+
+    def test_initialize(self):
+        """initialize()でベクトルストアが初期化される"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # initialize実行
+            engine.initialize()
+
+            # vector_store.initialize()が呼ばれたことを確認
+            mock_vector_store.initialize.assert_called_once()
+
+    def test_initialize_handles_error(self):
+        """initialize()でエラーが発生した場合にRAGEngineErrorがraise"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # vector_store.initialize()でエラーを発生させる
+        mock_vector_store.initialize.side_effect = Exception("Initialization failed")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.initialize()
+
+            error_message = str(exc_info.value)
+            assert "RAGエンジンの初期化に失敗しました" in error_message
+            assert "Initialization failed" in error_message
+
+    def test_context_manager(self):
+        """コンテキストマネージャーとして使用できる"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # コンテキストマネージャーとして使用
+            with engine as eng:
+                # __enter__でinitialize()が呼ばれる
+                mock_vector_store.initialize.assert_called_once()
+                assert eng is engine
+
+            # __exit__でclose()が呼ばれる
+            mock_vector_store.close.assert_called_once()
+
+    def test_context_manager_handles_exception(self):
+        """コンテキストマネージャーで例外が発生してもclose()が呼ばれる"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # コンテキストマネージャー内で例外を発生させる
+            try:
+                with engine:
+                    raise ValueError("Test error")
+            except ValueError:
+                pass
+
+            # 例外が発生してもclose()が呼ばれることを確認
+            mock_vector_store.close.assert_called_once()
