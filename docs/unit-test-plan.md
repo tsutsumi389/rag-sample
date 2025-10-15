@@ -209,10 +209,10 @@ tests/
 - ✓ 初期化失敗時にVectorStoreErrorがraise（モック）
 
 ##### 5.2 VectorStore - ドキュメント追加
-- ✓ add_documents()で正しくChunkが追加される（モック）
-- ✓ chunksとembeddingsの長さが不一致でVectorStoreErrorがraise
-- ✓ 空リストの追加で警告ログが出力される
-- ✓ コレクション未初期化でVectorStoreErrorがraise
+- ✅ add_documents()で正しくChunkが追加される（モック）
+- ✅ chunksとembeddingsの長さが不一致でVectorStoreErrorがraise
+- ✅ 空リストの追加で警告ログが出力される
+- ✅ コレクション未初期化でVectorStoreErrorがraise
 
 ##### 5.3 VectorStore - 検索
 - ✓ search()で正しいSearchResultリストが返される（モック）
