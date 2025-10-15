@@ -188,3 +188,38 @@ class TestEmbeddingGeneratorDocumentEmbedding:
 
             # embed_documentsが呼ばれたことを確認
             mock_embeddings_instance.embed_documents.assert_called_once_with(texts)
+
+
+class TestEmbeddingGeneratorQueryEmbedding:
+    """EmbeddingGenerator - クエリ埋め込みのテスト"""
+
+    def test_embed_query_returns_correct_vector(self):
+        """embed_query()で正しいベクトルが返される（モック）"""
+        query = "これはテストクエリです"
+        mock_vector = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_embeddings_instance.embed_query.return_value = mock_vector
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = EmbeddingGenerator()
+            result = generator.embed_query(query)
+
+            # 結果の確認
+            assert result == mock_vector
+            assert isinstance(result, list)
+
+            # embed_queryが正しい引数で呼ばれたことを確認
+            mock_embeddings_instance.embed_query.assert_called_once_with(query)
+
+    def test_embed_query_with_empty_string_raises_value_error(self):
+        """空文字列でValueErrorがraise"""
+        with patch("src.rag.embeddings.OllamaEmbeddings"):
+            generator = EmbeddingGenerator()
+
+            with pytest.raises(ValueError) as exc_info:
+                generator.embed_query("")
+
+            error_message = str(exc_info.value)
+            assert "text cannot be empty" in error_message
