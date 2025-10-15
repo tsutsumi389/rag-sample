@@ -132,3 +132,114 @@ class TestDocument:
         )
 
         assert doc.size == 0
+
+
+class TestChunk:
+    """Chunkクラスのテスト。"""
+
+    def test_create_chunk_with_valid_data(self):
+        """正常なChunkインスタンスの作成。"""
+        chunk = Chunk(
+            content="これはテストチャンクです。",
+            chunk_id="doc123_chunk_0001",
+            document_id="doc123",
+            chunk_index=0,
+            start_char=0,
+            end_char=13
+        )
+
+        assert chunk.content == "これはテストチャンクです。"
+        assert chunk.chunk_id == "doc123_chunk_0001"
+        assert chunk.document_id == "doc123"
+        assert chunk.chunk_index == 0
+        assert chunk.start_char == 0
+        assert chunk.end_char == 13
+        assert isinstance(chunk.metadata, dict)
+
+    def test_post_init_adds_metadata(self):
+        """__post_init__でメタデータが正しく追加されることを確認。"""
+        chunk = Chunk(
+            content="テストコンテンツ",
+            chunk_id="doc456_chunk_0002",
+            document_id="doc456",
+            chunk_index=1,
+            start_char=100,
+            end_char=108
+        )
+
+        # チャンク固有のメタデータが追加されている
+        assert chunk.metadata['chunk_id'] == "doc456_chunk_0002"
+        assert chunk.metadata['document_id'] == "doc456"
+        assert chunk.metadata['chunk_index'] == 1
+        assert chunk.metadata['start_char'] == 100
+        assert chunk.metadata['end_char'] == 108
+        assert chunk.metadata['size'] == 8
+
+    def test_size_property_returns_content_length(self):
+        """sizeプロパティが正しい文字数を返すことを確認。"""
+        content = "これは日本語のテストチャンクです。"
+        chunk = Chunk(
+            content=content,
+            chunk_id="doc789_chunk_0003",
+            document_id="doc789",
+            chunk_index=2,
+            start_char=200,
+            end_char=217
+        )
+
+        assert chunk.size == len(content)
+        assert chunk.size == 17
+
+    def test_metadata_includes_chunk_specific_info(self):
+        """metadataにchunk固有の情報が含まれることを確認。"""
+        chunk = Chunk(
+            content="テスト",
+            chunk_id="doc001_chunk_0000",
+            document_id="doc001",
+            chunk_index=0,
+            start_char=0,
+            end_char=3
+        )
+
+        # すべてのチャンク固有の情報がメタデータに含まれている
+        required_keys = ['chunk_id', 'document_id', 'chunk_index', 'start_char', 'end_char', 'size']
+        for key in required_keys:
+            assert key in chunk.metadata
+
+    def test_custom_metadata_is_preserved(self):
+        """カスタムメタデータが保持され、追加のメタデータとマージされることを確認。"""
+        custom_metadata = {
+            "source_file": "example.txt",
+            "author": "テスト太郎"
+        }
+        chunk = Chunk(
+            content="テストチャンク",
+            chunk_id="doc002_chunk_0001",
+            document_id="doc002",
+            chunk_index=1,
+            start_char=50,
+            end_char=57,
+            metadata=custom_metadata.copy()
+        )
+
+        # カスタムメタデータが保持されている
+        assert chunk.metadata["source_file"] == "example.txt"
+        assert chunk.metadata["author"] == "テスト太郎"
+
+        # チャンク固有のメタデータも追加されている
+        assert chunk.metadata["chunk_id"] == "doc002_chunk_0001"
+        assert chunk.metadata["document_id"] == "doc002"
+
+    def test_empty_content_has_zero_size(self):
+        """空のコンテンツのsizeが0であることを確認。"""
+        chunk = Chunk(
+            content="",
+            chunk_id="doc003_chunk_0000",
+            document_id="doc003",
+            chunk_index=0,
+            start_char=0,
+            end_char=0
+        )
+
+        assert chunk.size == 0
+        assert chunk.metadata['size'] == 0
