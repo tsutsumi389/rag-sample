@@ -355,3 +355,141 @@ class TestSearchResult:
 
         assert result.score == 1.0
         assert result.rank == 1
+
+
+class TestChatMessage:
+    """ChatMessageクラスのテスト。"""
+
+    def test_create_chat_message_with_user_role(self):
+        """正常なChatMessageインスタンスの作成（user）。"""
+        message = ChatMessage(
+            role="user",
+            content="こんにちは、これはテストメッセージです。"
+        )
+
+        assert message.role == "user"
+        assert message.content == "こんにちは、これはテストメッセージです。"
+        assert isinstance(message.timestamp, datetime)
+        assert isinstance(message.metadata, dict)
+        assert message.metadata == {}
+
+    def test_create_chat_message_with_assistant_role(self):
+        """正常なChatMessageインスタンスの作成（assistant）。"""
+        message = ChatMessage(
+            role="assistant",
+            content="お答えします。これは回答メッセージです。"
+        )
+
+        assert message.role == "assistant"
+        assert message.content == "お答えします。これは回答メッセージです。"
+        assert isinstance(message.timestamp, datetime)
+
+    def test_create_chat_message_with_system_role(self):
+        """正常なChatMessageインスタンスの作成（system）。"""
+        message = ChatMessage(
+            role="system",
+            content="システムメッセージです。"
+        )
+
+        assert message.role == "system"
+        assert message.content == "システムメッセージです。"
+        assert isinstance(message.timestamp, datetime)
+
+    def test_invalid_role_raises_value_error(self):
+        """無効なroleでValueErrorがraiseされることを確認。"""
+        with pytest.raises(ValueError, match="Role must be one of"):
+            ChatMessage(
+                role="invalid_role",
+                content="これは無効な役割のメッセージです。"
+            )
+
+    def test_invalid_role_error_message_includes_valid_roles(self):
+        """無効なroleのエラーメッセージに有効な役割が含まれることを確認。"""
+        with pytest.raises(ValueError, match="'invalid_role'"):
+            ChatMessage(
+                role="invalid_role",
+                content="テストメッセージ"
+            )
+
+    def test_to_dict_returns_correct_format(self):
+        """to_dict()メソッドが正しい辞書を返すことを確認。"""
+        message = ChatMessage(
+            role="user",
+            content="テストメッセージです。",
+            metadata={"model": "test-model"}
+        )
+
+        result = message.to_dict()
+
+        assert isinstance(result, dict)
+        assert result == {
+            'role': 'user',
+            'content': 'テストメッセージです。'
+        }
+        # metadataやtimestampは含まれない
+        assert 'metadata' not in result
+        assert 'timestamp' not in result
+
+    def test_to_dict_with_all_roles(self):
+        """to_dict()が全ての有効な役割で機能することを確認。"""
+        roles = ['user', 'assistant', 'system']
+
+        for role in roles:
+            message = ChatMessage(
+                role=role,
+                content=f"{role}のメッセージ"
+            )
+            result = message.to_dict()
+
+            assert result['role'] == role
+            assert result['content'] == f"{role}のメッセージ"
+
+    def test_custom_metadata_is_preserved(self):
+        """カスタムメタデータが保持されることを確認。"""
+        custom_metadata = {
+            "model": "llama3.2",
+            "tokens": 42,
+            "context": ["doc1", "doc2"]
+        }
+        message = ChatMessage(
+            role="assistant",
+            content="メタデータ付きメッセージ",
+            metadata=custom_metadata
+        )
+
+        assert message.metadata == custom_metadata
+        assert message.metadata["model"] == "llama3.2"
+        assert message.metadata["tokens"] == 42
+
+    def test_timestamp_is_automatically_set(self):
+        """timestampが自動設定されることを確認。"""
+        before = datetime.now()
+        message = ChatMessage(
+            role="user",
+            content="タイムスタンプテスト"
+        )
+        after = datetime.now()
+
+        assert before <= message.timestamp <= after
+        assert isinstance(message.timestamp, datetime)
+
+    def test_custom_timestamp_is_preserved(self):
+        """カスタムタイムスタンプが保持されることを確認。"""
+        custom_timestamp = datetime(2024, 6, 15, 10, 30, 0)
+        message = ChatMessage(
+            role="user",
+            content="カスタムタイムスタンプテスト",
+            timestamp=custom_timestamp
+        )
+
+        assert message.timestamp == custom_timestamp
+
+    def test_empty_content_is_allowed(self):
+        """空のコンテンツが許可されることを確認。"""
+        message = ChatMessage(
+            role="user",
+            content=""
+        )
+
+        assert message.content == ""
+        assert message.role == "user"
