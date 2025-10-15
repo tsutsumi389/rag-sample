@@ -114,3 +114,77 @@ class TestEmbeddingGeneratorInitialization:
             assert "EmbeddingGenerator" in repr_str
             assert custom_model in repr_str
             assert custom_url in repr_str
+
+
+class TestEmbeddingGeneratorDocumentEmbedding:
+    """EmbeddingGenerator - ドキュメント埋め込みのテスト"""
+
+    def test_embed_documents_returns_correct_vectors(self):
+        """embed_documents()で正しいベクトルリストが返される（モック）"""
+        texts = ["テキスト1", "テキスト2", "テキスト3"]
+        mock_vectors = [
+            [0.1, 0.2, 0.3],
+            [0.4, 0.5, 0.6],
+            [0.7, 0.8, 0.9],
+        ]
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_embeddings_instance.embed_documents.return_value = mock_vectors
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = EmbeddingGenerator()
+            result = generator.embed_documents(texts)
+
+            # 結果の確認
+            assert result == mock_vectors
+            assert len(result) == len(texts)
+
+            # embed_documentsが正しい引数で呼ばれたことを確認
+            mock_embeddings_instance.embed_documents.assert_called_once_with(texts)
+
+    def test_embed_documents_with_empty_list_raises_value_error(self):
+        """空リストでValueErrorがraise"""
+        with patch("src.rag.embeddings.OllamaEmbeddings"):
+            generator = EmbeddingGenerator()
+
+            with pytest.raises(ValueError) as exc_info:
+                generator.embed_documents([])
+
+            error_message = str(exc_info.value)
+            assert "texts cannot be empty" in error_message
+
+    def test_embed_documents_with_empty_string_raises_value_error(self):
+        """空文字列を含むリストでValueErrorがraise"""
+        with patch("src.rag.embeddings.OllamaEmbeddings"):
+            generator = EmbeddingGenerator()
+
+            # 空文字列を含むリスト
+            texts_with_empty = ["text1", "", "text2"]
+
+            with pytest.raises(ValueError) as exc_info:
+                generator.embed_documents(texts_with_empty)
+
+            error_message = str(exc_info.value)
+            assert "texts cannot contain empty strings" in error_message
+
+    def test_embed_documents_batch_processing(self):
+        """バッチ処理が正しく動作する（モック）"""
+        # 大量のテキストを準備
+        texts = [f"テキスト{i}" for i in range(100)]
+        mock_vectors = [[0.1 * i, 0.2 * i, 0.3 * i] for i in range(100)]
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_embeddings_instance.embed_documents.return_value = mock_vectors
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = EmbeddingGenerator()
+            result = generator.embed_documents(texts)
+
+            # 結果の確認
+            assert len(result) == 100
+            assert result == mock_vectors
+
+            # embed_documentsが呼ばれたことを確認
+            mock_embeddings_instance.embed_documents.assert_called_once_with(texts)
