@@ -143,3 +143,617 @@ class TestVectorStoreInitialization:
             error_message = str(exc_info.value)
             assert "ChromaDBの初期化に失敗しました" in error_message
             assert "Database connection failed" in error_message
+
+
+class TestVectorStoreAddDocuments:
+    """VectorStore - ドキュメント追加のテスト"""
+
+    def test_add_documents_successfully(self, monkeypatch, tmp_path):
+        """add_documents()で正しくChunkが追加される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 0
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config, collection_name="documents")
+            vector_store.initialize()
+
+            # テスト用Chunkの作成
+            from src.models.document import Chunk
+
+            chunks = [
+                Chunk(
+                    content="これはテストチャンク1です。",
+                    chunk_id="doc1_chunk_0000",
+                    document_id="doc1",
+                    chunk_index=0,
+                    start_char=0,
+                    end_char=15,
+                    metadata={
+                        "document_name": "test.txt",
+                        "source": "/path/to/test.txt",
+                        "doc_type": "txt"
+                    }
+                ),
+                Chunk(
+                    content="これはテストチャンク2です。",
+                    chunk_id="doc1_chunk_0001",
+                    document_id="doc1",
+                    chunk_index=1,
+                    start_char=15,
+                    end_char=30,
+                    metadata={
+                        "document_name": "test.txt",
+                        "source": "/path/to/test.txt",
+                        "doc_type": "txt"
+                    }
+                )
+            ]
+
+            # テスト用埋め込みベクトル
+            embeddings = [
+                [0.1, 0.2, 0.3, 0.4, 0.5],
+                [0.2, 0.3, 0.4, 0.5, 0.6]
+            ]
+
+            # ドキュメント追加
+            vector_store.add_documents(chunks, embeddings)
+
+            # collection.add()が正しいパラメータで呼ばれたことを確認
+            mock_collection.add.assert_called_once()
+            call_kwargs = mock_collection.add.call_args.kwargs
+
+            assert call_kwargs["ids"] == ["doc1_chunk_0000", "doc1_chunk_0001"]
+            assert call_kwargs["documents"] == [
+                "これはテストチャンク1です。",
+                "これはテストチャンク2です。"
+            ]
+            assert call_kwargs["embeddings"] == embeddings
+            assert len(call_kwargs["metadatas"]) == 2
+            assert call_kwargs["metadatas"][0]["document_name"] == "test.txt"
+
+    def test_add_documents_mismatched_lengths_raises_error(self, monkeypatch, tmp_path):
+        """chunksとembeddingsの長さが不一致でVectorStoreErrorがraise"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 0
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # テスト用Chunkの作成
+            from src.models.document import Chunk
+
+            chunks = [
+                Chunk(
+                    content="テスト",
+                    chunk_id="doc1_chunk_0000",
+                    document_id="doc1",
+                    chunk_index=0,
+                    start_char=0,
+                    end_char=3,
+                )
+            ]
+
+            # 長さが異なる埋め込みベクトル（2つ）
+            embeddings = [
+                [0.1, 0.2, 0.3],
+                [0.4, 0.5, 0.6]
+            ]
+
+            # VectorStoreErrorがraiseされることを確認
+            with pytest.raises(VectorStoreError) as exc_info:
+                vector_store.add_documents(chunks, embeddings)
+
+            error_message = str(exc_info.value)
+            assert "チャンク数(1)と埋め込み数(2)が一致しません" in error_message
+
+    def test_add_documents_empty_list_logs_warning(self, monkeypatch, tmp_path, caplog):
+        """空リストの追加で警告ログが出力される"""
+        import logging
+
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 0
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # 空のリストで追加
+            with caplog.at_level(logging.WARNING):
+                vector_store.add_documents([], [])
+
+            # 警告ログが出力されたことを確認
+            assert "追加するチャンクがありません" in caplog.text
+
+            # collection.add()が呼ばれていないことを確認
+            mock_collection.add.assert_not_called()
+
+    def test_add_documents_without_initialization_raises_error(self, monkeypatch, tmp_path):
+        """コレクション未初期化でVectorStoreErrorがraise"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # VectorStoreの作成（初期化なし）
+        vector_store = VectorStore(config=config)
+
+        # テスト用Chunkの作成
+        from src.models.document import Chunk
+
+        chunks = [
+            Chunk(
+                content="テスト",
+                chunk_id="doc1_chunk_0000",
+                document_id="doc1",
+                chunk_index=0,
+                start_char=0,
+                end_char=3,
+            )
+        ]
+        embeddings = [[0.1, 0.2, 0.3]]
+
+        # VectorStoreErrorがraiseされることを確認
+        with pytest.raises(VectorStoreError) as exc_info:
+            vector_store.add_documents(chunks, embeddings)
+
+        error_message = str(exc_info.value)
+        assert "コレクションが初期化されていません" in error_message
+
+
+class TestVectorStoreSearch:
+    """VectorStore - 検索のテスト"""
+
+    def test_search_returns_correct_results(self, monkeypatch, tmp_path):
+        """search()で正しいSearchResultリストが返される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 10
+
+            # 検索結果のモックデータ
+            mock_collection.query.return_value = {
+                'ids': [['chunk_1', 'chunk_2', 'chunk_3']],
+                'documents': [['ドキュメント1の内容', 'ドキュメント2の内容', 'ドキュメント3の内容']],
+                'metadatas': [[
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 10,
+                        'size': 10
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.txt',
+                        'source': '/path/to/test2.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 10,
+                        'size': 10
+                    },
+                    {
+                        'document_id': 'doc3',
+                        'document_name': 'test3.txt',
+                        'source': '/path/to/test3.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 10,
+                        'size': 10
+                    }
+                ]],
+                'distances': [[0.1, 0.3, 0.5]]
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config, collection_name="documents")
+            vector_store.initialize()
+
+            # 検索実行
+            query_embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+            results = vector_store.search(query_embedding, n_results=3)
+
+            # 結果の検証
+            assert len(results) == 3
+            assert results[0].chunk.content == 'ドキュメント1の内容'
+            assert results[0].chunk.chunk_id == 'chunk_1'
+            assert results[0].document_name == 'test1.txt'
+            assert results[0].document_source == '/path/to/test1.txt'
+            assert results[0].rank == 1
+
+            # スコアの検証（距離0.1から変換）
+            expected_score_1 = 1.0 / (1.0 + 0.1)
+            assert abs(results[0].score - expected_score_1) < 0.01
+
+            assert results[1].chunk.content == 'ドキュメント2の内容'
+            assert results[1].rank == 2
+
+            assert results[2].chunk.content == 'ドキュメント3の内容'
+            assert results[2].rank == 3
+
+            # collection.query()が正しいパラメータで呼ばれたことを確認
+            mock_collection.query.assert_called_once()
+            call_kwargs = mock_collection.query.call_args.kwargs
+            assert call_kwargs['query_embeddings'] == [query_embedding]
+            assert call_kwargs['n_results'] == 3
+            assert call_kwargs['include'] == ["documents", "metadatas", "distances"]
+
+    def test_search_with_where_filter(self, monkeypatch, tmp_path):
+        """whereフィルタが正しく適用される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 10
+
+            # フィルタリングされた検索結果のモックデータ
+            mock_collection.query.return_value = {
+                'ids': [['chunk_1']],
+                'documents': [['フィルタされたドキュメント']],
+                'metadatas': [[
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 15,
+                        'size': 15
+                    }
+                ]],
+                'distances': [[0.2]]
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # whereフィルタを使用して検索
+            query_embedding = [0.1, 0.2, 0.3]
+            where_filter = {"document_id": "doc1"}
+            results = vector_store.search(
+                query_embedding,
+                n_results=5,
+                where=where_filter
+            )
+
+            # 結果の検証
+            assert len(results) == 1
+            assert results[0].chunk.document_id == 'doc1'
+
+            # whereフィルタが正しく渡されたことを確認
+            mock_collection.query.assert_called_once()
+            call_kwargs = mock_collection.query.call_args.kwargs
+            assert call_kwargs['where'] == where_filter
+
+    def test_search_with_n_results_parameter(self, monkeypatch, tmp_path):
+        """n_resultsパラメータが機能する（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 10
+
+            # 10件の検索結果のモックデータを作成
+            ids = [[f'chunk_{i}' for i in range(10)]]
+            documents = [[f'ドキュメント{i}の内容' for i in range(10)]]
+            metadatas = [[{
+                'document_id': f'doc{i}',
+                'document_name': f'test{i}.txt',
+                'source': f'/path/to/test{i}.txt',
+                'chunk_index': 0,
+                'start_char': 0,
+                'end_char': 10,
+                'size': 10
+            } for i in range(10)]]
+            distances = [[0.1 * i for i in range(10)]]
+
+            mock_collection.query.return_value = {
+                'ids': ids,
+                'documents': documents,
+                'metadatas': metadatas,
+                'distances': distances
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # n_results=10で検索
+            query_embedding = [0.1, 0.2, 0.3]
+            results = vector_store.search(query_embedding, n_results=10)
+
+            # 結果の検証
+            assert len(results) == 10
+
+            # n_resultsが正しく渡されたことを確認
+            mock_collection.query.assert_called_once()
+            call_kwargs = mock_collection.query.call_args.kwargs
+            assert call_kwargs['n_results'] == 10
+
+    def test_search_returns_empty_list_when_no_results(self, monkeypatch, tmp_path):
+        """検索結果が空の場合に空リストが返される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 0
+
+            # 空の検索結果
+            mock_collection.query.return_value = {
+                'ids': [[]],
+                'documents': [[]],
+                'metadatas': [[]],
+                'distances': [[]]
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # 検索実行
+            query_embedding = [0.1, 0.2, 0.3]
+            results = vector_store.search(query_embedding, n_results=5)
+
+            # 空のリストが返されることを確認
+            assert results == []
+
+    def test_search_score_calculation(self, monkeypatch, tmp_path):
+        """スコア計算（距離から類似度への変換）が正しい"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 3
+
+            # 異なる距離の検索結果をモック
+            mock_collection.query.return_value = {
+                'ids': [['chunk_1', 'chunk_2', 'chunk_3']],
+                'documents': [['Doc1', 'Doc2', 'Doc3']],
+                'metadatas': [[
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 4,
+                        'size': 4
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.txt',
+                        'source': '/path/to/test2.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 4,
+                        'size': 4
+                    },
+                    {
+                        'document_id': 'doc3',
+                        'document_name': 'test3.txt',
+                        'source': '/path/to/test3.txt',
+                        'chunk_index': 0,
+                        'start_char': 0,
+                        'end_char': 4,
+                        'size': 4
+                    }
+                ]],
+                'distances': [[0.0, 1.0, 4.0]]  # 距離: 0.0, 1.0, 4.0
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # 検索実行
+            query_embedding = [0.1, 0.2, 0.3]
+            results = vector_store.search(query_embedding, n_results=3)
+
+            # スコア計算の検証
+            # score = 1.0 / (1.0 + distance)
+
+            # 距離0.0のスコア: 1.0 / (1.0 + 0.0) = 1.0
+            assert abs(results[0].score - 1.0) < 0.01
+
+            # 距離1.0のスコア: 1.0 / (1.0 + 1.0) = 0.5
+            assert abs(results[1].score - 0.5) < 0.01
+
+            # 距離4.0のスコア: 1.0 / (1.0 + 4.0) = 0.2
+            assert abs(results[2].score - 0.2) < 0.01
+
+            # スコアが降順（類似度が高い順）になっていることを確認
+            assert results[0].score > results[1].score > results[2].score
