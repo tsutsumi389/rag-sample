@@ -757,3 +757,232 @@ class TestVectorStoreSearch:
 
             # スコアが降順（類似度が高い順）になっていることを確認
             assert results[0].score > results[1].score > results[2].score
+
+
+class TestVectorStoreDelete:
+    """VectorStore - 削除のテスト"""
+
+    def test_delete_by_document_id(self, monkeypatch, tmp_path):
+        """delete()でdocument_id指定による削除（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 10、削除前: 10、削除後: 7（3件削除）
+            mock_collection.count.side_effect = [10, 10, 7]
+            mock_collection.delete = Mock()
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # document_id指定で削除
+            deleted_count = vector_store.delete(document_id="doc1")
+
+            # 削除メソッドが正しく呼ばれたことを確認
+            mock_collection.delete.assert_called_once_with(
+                where={"document_id": "doc1"}
+            )
+
+            # 削除件数が正しく返されることを確認
+            assert deleted_count == 3
+
+    def test_delete_by_chunk_ids(self, monkeypatch, tmp_path):
+        """delete()でchunk_ids指定による削除（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 10、削除前: 10、削除後: 8（2件削除）
+            mock_collection.count.side_effect = [10, 10, 8]
+            mock_collection.delete = Mock()
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # chunk_ids指定で削除
+            chunk_ids_to_delete = ["chunk_1", "chunk_2"]
+            deleted_count = vector_store.delete(chunk_ids=chunk_ids_to_delete)
+
+            # 削除メソッドが正しく呼ばれたことを確認
+            mock_collection.delete.assert_called_once_with(ids=chunk_ids_to_delete)
+
+            # 削除件数が正しく返されることを確認
+            assert deleted_count == 2
+
+    def test_delete_by_where_filter(self, monkeypatch, tmp_path):
+        """delete()でwhereフィルタによる削除（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 15、削除前: 15、削除後: 10（5件削除）
+            mock_collection.count.side_effect = [15, 15, 10]
+            mock_collection.delete = Mock()
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # whereフィルタで削除
+            where_filter = {"doc_type": "txt"}
+            deleted_count = vector_store.delete(where=where_filter)
+
+            # 削除メソッドが正しく呼ばれたことを確認
+            mock_collection.delete.assert_called_once_with(where=where_filter)
+
+            # 削除件数が正しく返されることを確認
+            assert deleted_count == 5
+
+    def test_delete_without_conditions_raises_error(self, monkeypatch, tmp_path):
+        """削除条件未指定でVectorStoreErrorがraise"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 10
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # 削除条件なしで呼び出し
+            with pytest.raises(VectorStoreError) as exc_info:
+                vector_store.delete()
+
+            # エラーメッセージの確認
+            error_message = str(exc_info.value)
+            assert "削除条件が指定されていません" in error_message
+
+    def test_delete_returns_correct_count(self, monkeypatch, tmp_path):
+        """削除件数が正しく返される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 100、削除前: 100、削除後: 75（25件削除）
+            mock_collection.count.side_effect = [100, 100, 75]
+            mock_collection.delete = Mock()
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # 削除実行
+            deleted_count = vector_store.delete(document_id="large_doc")
+
+            # 削除件数が正しいことを確認
+            assert deleted_count == 25
+
+            # countが3回呼ばれたことを確認（初期化時1回 + 削除前後2回）
+            assert mock_collection.count.call_count == 3
