@@ -986,3 +986,340 @@ class TestVectorStoreDelete:
 
             # countが3回呼ばれたことを確認（初期化時1回 + 削除前後2回）
             assert mock_collection.count.call_count == 3
+
+
+class TestVectorStoreOtherOperations:
+    """VectorStore - その他操作のテスト"""
+
+    def test_list_documents(self, monkeypatch, tmp_path):
+        """list_documents()でドキュメント一覧が取得できる（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 5
+
+            # 複数ドキュメントのチャンクを含むデータ
+            mock_collection.get.return_value = {
+                'ids': ['doc1_chunk_0', 'doc1_chunk_1', 'doc2_chunk_0', 'doc2_chunk_1', 'doc2_chunk_2'],
+                'documents': ['Content1', 'Content2', 'Content3', 'Content4', 'Content5'],
+                'metadatas': [
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'doc_type': 'txt',
+                        'size': 100
+                    },
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'doc_type': 'txt',
+                        'size': 120
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.md',
+                        'source': '/path/to/test2.md',
+                        'doc_type': 'md',
+                        'size': 80
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.md',
+                        'source': '/path/to/test2.md',
+                        'doc_type': 'md',
+                        'size': 90
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.md',
+                        'source': '/path/to/test2.md',
+                        'doc_type': 'md',
+                        'size': 110
+                    }
+                ]
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # ドキュメント一覧を取得
+            documents = vector_store.list_documents()
+
+            # 結果の検証
+            assert len(documents) == 2  # 2つのドキュメント
+
+            # doc1の検証
+            doc1 = next(d for d in documents if d['document_id'] == 'doc1')
+            assert doc1['document_name'] == 'test1.txt'
+            assert doc1['source'] == '/path/to/test1.txt'
+            assert doc1['doc_type'] == 'txt'
+            assert doc1['chunk_count'] == 2
+            assert doc1['total_size'] == 220  # 100 + 120
+
+            # doc2の検証
+            doc2 = next(d for d in documents if d['document_id'] == 'doc2')
+            assert doc2['document_name'] == 'test2.md'
+            assert doc2['source'] == '/path/to/test2.md'
+            assert doc2['doc_type'] == 'md'
+            assert doc2['chunk_count'] == 3
+            assert doc2['total_size'] == 280  # 80 + 90 + 110
+
+            # collection.get()が呼ばれたことを確認
+            mock_collection.get.assert_called_once()
+            call_kwargs = mock_collection.get.call_args.kwargs
+            assert call_kwargs['include'] == ["metadatas", "documents"]
+
+    def test_clear(self, monkeypatch, tmp_path):
+        """clear()で全データが削除される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 10個、clear実行時: 10個
+            mock_collection.count.side_effect = [10, 10]
+
+            # 新しいコレクションのモック
+            new_collection = Mock()
+            new_collection.count.return_value = 0
+
+            mock_client.get_or_create_collection.side_effect = [
+                mock_collection,  # 初回の初期化
+                new_collection    # clear後の再作成
+            ]
+            mock_client.delete_collection = Mock()
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config, collection_name="test_collection")
+            vector_store.initialize()
+
+            # clear実行
+            vector_store.clear()
+
+            # delete_collectionが呼ばれたことを確認
+            mock_client.delete_collection.assert_called_once_with("test_collection")
+
+            # get_or_create_collectionが2回呼ばれたことを確認
+            assert mock_client.get_or_create_collection.call_count == 2
+
+            # コレクションが再作成されたことを確認
+            assert vector_store.collection == new_collection
+
+    def test_get_document_count(self, monkeypatch, tmp_path):
+        """get_document_count()で正しいカウントが返される（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # 初期化時: 42個、get_document_count呼び出し時: 42個
+            mock_collection.count.side_effect = [42, 42]
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config)
+            vector_store.initialize()
+
+            # ドキュメント数を取得
+            count = vector_store.get_document_count()
+
+            # 結果の検証
+            assert count == 42
+
+            # collection.count()が呼ばれたことを確認
+            assert mock_collection.count.call_count == 2
+
+    def test_get_collection_info(self, monkeypatch, tmp_path):
+        """get_collection_info()でコレクション情報が取得できる（モック）"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # テスト用ディレクトリを設定
+        chroma_dir = tmp_path / "chroma_db"
+        monkeypatch.setenv("CHROMA_PERSIST_DIRECTORY", str(chroma_dir))
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+
+            # count()の呼び出しパターン
+            # 1回目: 初期化時
+            # 2回目: list_documents()内のcount()
+            # 3回目: get_collection_info()内のcount()
+            mock_collection.count.side_effect = [15, 15, 15]
+            mock_collection.metadata = {
+                "description": "RAG application document store"
+            }
+
+            # list_documents用のモックデータ
+            mock_collection.get.return_value = {
+                'ids': ['doc1_chunk_0', 'doc1_chunk_1', 'doc2_chunk_0'],
+                'documents': ['Content1', 'Content2', 'Content3'],
+                'metadatas': [
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'doc_type': 'txt',
+                        'size': 100
+                    },
+                    {
+                        'document_id': 'doc1',
+                        'document_name': 'test1.txt',
+                        'source': '/path/to/test1.txt',
+                        'doc_type': 'txt',
+                        'size': 120
+                    },
+                    {
+                        'document_id': 'doc2',
+                        'document_name': 'test2.md',
+                        'source': '/path/to/test2.md',
+                        'doc_type': 'md',
+                        'size': 80
+                    }
+                ]
+            }
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # VectorStoreの作成と初期化
+            vector_store = VectorStore(config=config, collection_name="my_collection")
+            vector_store.initialize()
+
+            # コレクション情報を取得
+            info = vector_store.get_collection_info()
+
+            # 結果の検証
+            assert info['collection_name'] == 'my_collection'
+            assert info['total_chunks'] == 15
+            assert info['unique_documents'] == 2
+            assert str(chroma_dir) in info['persist_directory']
+            assert info['metadata'] == {"description": "RAG application document store"}
+
+    def test_context_manager(self, monkeypatch, tmp_path):
+        """`with`文で初期化・クローズが自動実行される"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        config = Config(env_file=str(empty_env_file))
+
+        # ChromaDBのモック
+        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+            mock_client = Mock()
+            mock_collection = Mock()
+            mock_collection.count.return_value = 5
+
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
+
+            # コンテキストマネージャーとして使用
+            vector_store = VectorStore(config=config)
+
+            # with文の前はNone
+            assert vector_store.collection is None
+            assert vector_store.client is None
+
+            with vector_store as vs:
+                # with文の中では初期化されている
+                assert vs.collection is not None
+                assert vs.client is not None
+                assert vs.collection == mock_collection
+                assert vs.client == mock_client
+
+            # with文の外では閉じられている
+            assert vector_store.collection is None
+            assert vector_store.client is None

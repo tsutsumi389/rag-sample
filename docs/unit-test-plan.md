@@ -215,27 +215,27 @@ tests/
 - ✅ コレクション未初期化でVectorStoreErrorがraise
 
 ##### 5.3 VectorStore - 検索
-- ✓ search()で正しいSearchResultリストが返される（モック）
-- ✓ whereフィルタが正しく適用される（モック）
-- ✓ n_resultsパラメータが機能する（モック）
-- ✓ 検索結果が空の場合に空リストが返される（モック）
-- ✓ スコア計算（距離から類似度への変換）が正しい
+- ✅ search()で正しいSearchResultリストが返される（モック）
+- ✅ whereフィルタが正しく適用される（モック）
+- ✅ n_resultsパラメータが機能する（モック）
+- ✅ 検索結果が空の場合に空リストが返される（モック）
+- ✅ スコア計算（距離から類似度への変換）が正しい
 
 ##### 5.4 VectorStore - 削除
-- ✓ delete()でdocument_id指定による削除（モック）
-- ✓ delete()でchunk_ids指定による削除（モック）
-- ✓ delete()でwhereフィルタによる削除（モック）
-- ✓ 削除条件未指定でVectorStoreErrorがraise
-- ✓ 削除件数が正しく返される（モック）
+- ✅ delete()でdocument_id指定による削除（モック）
+- ✅ delete()でchunk_ids指定による削除（モック）
+- ✅ delete()でwhereフィルタによる削除（モック）
+- ✅ 削除条件未指定でVectorStoreErrorがraise
+- ✅ 削除件数が正しく返される（モック）
 
 ##### 5.5 VectorStore - その他操作
-- ✓ list_documents()でドキュメント一覧が取得できる（モック）
-- ✓ clear()で全データが削除される（モック）
-- ✓ get_document_count()で正しいカウントが返される（モック）
-- ✓ get_collection_info()でコレクション情報が取得できる（モック）
+- ✅ list_documents()でドキュメント一覧が取得できる（モック）
+- ✅ clear()で全データが削除される（モック）
+- ✅ get_document_count()で正しいカウントが返される（モック）
+- ✅ get_collection_info()でコレクション情報が取得できる（モック）
 
 ##### 5.6 VectorStore - コンテキストマネージャー
-- ✓ `with`文で初期化・クローズが自動実行される
+- ✅ `with`文で初期化・クローズが自動実行される
 
 ### 6. RAGエンジン（`src/rag/engine.py`）
 
