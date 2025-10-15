@@ -190,6 +190,339 @@ class TestConfigNormalCases:
         assert test_chroma_dir.is_dir()
 
 
+class TestConfigValidationErrors:
+    """Config クラスのバリデーション異常系テスト"""
+
+    def test_invalid_ollama_base_url_without_protocol(self, monkeypatch, tmp_path):
+        """http/https以外のOLLAMA_BASE_URLでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 不正なURLを設定（プロトコルなし）
+        monkeypatch.setenv("OLLAMA_BASE_URL", "localhost:11434")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "must start with http:// or https://" in str(exc_info.value)
+
+    def test_invalid_ollama_base_url_with_invalid_protocol(self, monkeypatch, tmp_path):
+        """ftp://などの不正なプロトコルでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 不正なプロトコルを設定
+        monkeypatch.setenv("OLLAMA_BASE_URL", "ftp://localhost:11434")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "must start with http:// or https://" in str(exc_info.value)
+
+    def test_empty_ollama_llm_model(self, monkeypatch, tmp_path):
+        """空のOLLAMA_LLM_MODELでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空のモデル名を設定
+        monkeypatch.setenv("OLLAMA_LLM_MODEL", "   ")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "OLLAMA_LLM_MODEL cannot be empty" in str(exc_info.value)
+
+    def test_empty_ollama_embedding_model(self, monkeypatch, tmp_path):
+        """空のOLLAMA_EMBEDDING_MODELでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 空の埋め込みモデル名を設定
+        monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "OLLAMA_EMBEDDING_MODEL cannot be empty" in str(exc_info.value)
+
+    def test_chunk_size_too_small(self, monkeypatch, tmp_path):
+        """CHUNK_SIZEが最小値未満でConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 最小値未満のチャンクサイズを設定
+        monkeypatch.setenv("CHUNK_SIZE", "50")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "CHUNK_SIZE must be between" in str(exc_info.value)
+        assert "100" in str(exc_info.value)
+
+    def test_chunk_size_too_large(self, monkeypatch, tmp_path):
+        """CHUNK_SIZEが最大値超過でConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 最大値超過のチャンクサイズを設定
+        monkeypatch.setenv("CHUNK_SIZE", "20000")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "CHUNK_SIZE must be between" in str(exc_info.value)
+        assert "10000" in str(exc_info.value)
+
+    def test_chunk_overlap_negative(self, monkeypatch, tmp_path):
+        """CHUNK_OVERLAPが負数でConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 負数のオーバーラップを設定
+        monkeypatch.setenv("CHUNK_OVERLAP", "-10")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "CHUNK_OVERLAP must be >=" in str(exc_info.value)
+
+    def test_chunk_overlap_greater_than_or_equal_to_chunk_size(self, monkeypatch, tmp_path):
+        """CHUNK_OVERLAP >= CHUNK_SIZEでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # CHUNK_OVERLAP >= CHUNK_SIZEとなる値を設定
+        monkeypatch.setenv("CHUNK_SIZE", "500")
+        monkeypatch.setenv("CHUNK_OVERLAP", "500")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "must be less than" in str(exc_info.value)
+        assert "CHUNK_SIZE" in str(exc_info.value)
+
+    def test_chunk_overlap_greater_than_chunk_size(self, monkeypatch, tmp_path):
+        """CHUNK_OVERLAP > CHUNK_SIZEでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # CHUNK_OVERLAP > CHUNK_SIZEとなる値を設定
+        monkeypatch.setenv("CHUNK_SIZE", "500")
+        monkeypatch.setenv("CHUNK_OVERLAP", "600")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "must be less than" in str(exc_info.value)
+
+    def test_invalid_log_level(self, monkeypatch, tmp_path):
+        """不正なLOG_LEVELでConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 不正なログレベルを設定
+        monkeypatch.setenv("LOG_LEVEL", "INVALID")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "LOG_LEVEL must be one of" in str(exc_info.value)
+
+    def test_chunk_size_not_integer(self, monkeypatch, tmp_path):
+        """CHUNK_SIZEが整数でない場合にConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 整数でない値を設定
+        monkeypatch.setenv("CHUNK_SIZE", "not_a_number")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "CHUNK_SIZE must be an integer" in str(exc_info.value)
+
+    def test_chunk_overlap_not_integer(self, monkeypatch, tmp_path):
+        """CHUNK_OVERLAPが整数でない場合にConfigErrorが発生"""
+        # 環境変数をクリア
+        for key in [
+            "OLLAMA_BASE_URL",
+            "OLLAMA_LLM_MODEL",
+            "OLLAMA_EMBEDDING_MODEL",
+            "CHROMA_PERSIST_DIRECTORY",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "LOG_LEVEL",
+        ]:
+            monkeypatch.delenv(key, raising=False)
+
+        # 整数でない値を設定
+        monkeypatch.setenv("CHUNK_OVERLAP", "12.5")
+
+        # 空の.envファイルを作成
+        empty_env_file = tmp_path / "empty.env"
+        empty_env_file.write_text("")
+
+        # ConfigErrorが発生することを確認
+        with pytest.raises(ConfigError) as exc_info:
+            Config(env_file=str(empty_env_file))
+
+        assert "CHUNK_OVERLAP must be an integer" in str(exc_info.value)
+
+
 class TestGetConfigFunction:
     """get_config 関数のテスト"""
 
