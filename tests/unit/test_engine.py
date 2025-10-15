@@ -958,3 +958,294 @@ class TestRAGEngineQuery:
             # retrieveは実行されたことを確認
             mock_embedding_generator.embed_query.assert_called_once()
             mock_vector_store.search.assert_called_once()
+
+
+class TestRAGEngineChat:
+    """RAGEngine - チャット機能のテスト"""
+
+    def test_chat_generates_chat_response(self):
+        """chat()でチャット形式の回答が生成される（モック）"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # 検索結果のモック
+        mock_chunk = Chunk(
+            content="Pythonは動的型付け言語です。",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=16,
+            metadata={"source": "python.txt"}
+        )
+        mock_search_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="python.txt",
+                document_source="/path/to/python.txt",
+                rank=1
+            )
+        ]
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = mock_search_results
+        mock_llm.invoke.return_value = "Pythonは動的型付け言語です。"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # チャット実行
+            message = "Pythonの型について教えて"
+            result = engine.chat(message)
+
+            # 結果の検証
+            assert result["answer"] == "Pythonは動的型付け言語です。"
+            assert result["context_count"] == 1
+            assert result["history_length"] == 2  # user + assistant
+            assert "sources" in result
+            assert len(result["sources"]) == 1
+
+            # LLMが呼ばれたことを確認
+            mock_llm.invoke.assert_called_once()
+
+    def test_chat_adds_messages_to_history(self):
+        """chat_historyにメッセージが追加される"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答1"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 初期状態の確認
+            assert len(engine.chat_history) == 0
+
+            # 最初のチャット
+            result1 = engine.chat("質問1")
+            assert len(engine.chat_history) == 2  # user + assistant
+            assert result1["history_length"] == 2
+
+            # チャット履歴の内容を確認
+            messages = engine.chat_history.messages
+            assert messages[0].role == "user"
+            assert messages[0].content == "質問1"
+            assert messages[1].role == "assistant"
+            assert messages[1].content == "回答1"
+
+            # 2回目のチャット
+            mock_llm.invoke.return_value = "回答2"
+            result2 = engine.chat("質問2")
+            assert len(engine.chat_history) == 4  # (user + assistant) * 2
+            assert result2["history_length"] == 4
+
+    def test_chat_includes_history_in_prompt(self):
+        """履歴がプロンプトに含まれる"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 最初のチャット
+            engine.chat("最初の質問")
+            mock_llm.reset_mock()
+
+            # 2回目のチャット
+            engine.chat("次の質問")
+
+            # プロンプトに履歴が含まれていることを確認
+            mock_llm.invoke.assert_called_once()
+            prompt = mock_llm.invoke.call_args[0][0]
+
+            # 過去の会話が含まれていることを確認
+            assert "過去の会話:" in prompt
+            assert "user: 最初の質問" in prompt
+            assert "assistant: 回答" in prompt
+            assert "次の質問" in prompt
+
+    def test_chat_respects_max_chat_history(self):
+        """max_chat_historyによる履歴制限が機能する"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "回答"
+
+        # RAGEngineの初期化（max_chat_history=4: 2往復分）
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator,
+                max_chat_history=4
+            )
+
+            # 3往復のチャットを実行（6メッセージ）
+            engine.chat("質問1")
+            engine.chat("質問2")
+            engine.chat("質問3")
+
+            # 履歴が最大4メッセージに制限されていることを確認
+            assert len(engine.chat_history) == 4
+            assert engine.chat_history.max_messages == 4
+
+            # 古いメッセージが削除され、新しいメッセージが残っていることを確認
+            messages = engine.chat_history.messages
+            # 最新の2往復（質問2,回答2,質問3,回答3）が残っている
+            assert messages[0].content == "質問2"
+            assert messages[2].content == "質問3"
+
+    def test_chat_with_empty_search_results(self):
+        """検索結果が空の場合のチャット動作"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # モックの設定（検索結果なし）
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.return_value = "情報が見つかりませんでした。"
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # チャット実行
+            result = engine.chat("質問")
+
+            # 結果の検証
+            assert result["context_count"] == 0
+            assert "sources" not in result  # 検索結果がないのでsourcesなし
+
+            # プロンプトに「関連する情報が見つかりませんでした」が含まれることを確認
+            prompt = mock_llm.invoke.call_args[0][0]
+            assert "関連する情報が見つかりませんでした。" in prompt
+
+    def test_chat_handles_retrieve_error(self):
+        """chat()でretrieve()がエラーを起こした場合の処理"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # embed_queryでエラーを発生させる
+        mock_embedding_generator.embed_query.side_effect = Exception("Search error")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.chat("質問")
+
+            error_message = str(exc_info.value)
+            assert "ドキュメントの検索に失敗しました" in error_message
+
+            # ユーザーメッセージは履歴に追加されているが、アシスタント応答はない
+            assert len(engine.chat_history) == 1
+            assert engine.chat_history.messages[0].role == "user"
+
+    def test_chat_handles_llm_error(self):
+        """chat()でLLMがエラーを起こした場合の処理"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+        mock_llm = Mock()
+
+        # retrieveは成功するが、LLMで失敗
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = []
+        mock_llm.invoke.side_effect = Exception("LLM error")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
+
+            mock_llm_cls.return_value = mock_llm
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.chat("質問")
+
+            error_message = str(exc_info.value)
+            assert "チャット回答の生成に失敗しました" in error_message
+            assert "LLM error" in error_message
+
+            # ユーザーメッセージは履歴に追加されているが、アシスタント応答はない
+            assert len(engine.chat_history) == 1
+            assert engine.chat_history.messages[0].role == "user"
