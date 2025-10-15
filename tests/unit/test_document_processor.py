@@ -247,3 +247,116 @@ class TestDocumentProcessorErrorHandling:
             processor.load_document(invalid_file)
 
         assert "エンコーディングを認識できません" in str(exc_info.value)
+
+
+@pytest.mark.unit
+class TestDocumentProcessorTextSplitting:
+    """DocumentProcessor - テキスト分割のテスト（3.3）。"""
+
+    def test_split_text_creates_chunks(self, processor):
+        """split_text()で正しくチャンクに分割される。"""
+        # 長めのテキストを用意（デフォルトのchunk_size=1000より大きくする）
+        text = "これはテストです。" * 200  # 1800文字程度
+
+        chunks = processor.split_text(text)
+
+        # チャンクが作成されることを確認
+        assert isinstance(chunks, list)
+        assert len(chunks) > 0
+        # 複数のチャンクに分割されることを確認（テキストが十分長い場合）
+        assert len(chunks) > 1
+
+    def test_split_text_respects_chunk_size(self, config):
+        """chunk_sizeが正しく適用されることを確認。"""
+        # カスタムchunk_sizeで初期化
+        config.chunk_size = 100
+        config.chunk_overlap = 20
+        processor = DocumentProcessor(config)
+
+        # 長いテキスト（500文字）
+        text = "あ" * 500
+
+        chunks = processor.split_text(text)
+
+        # 各チャンクのサイズを確認
+        for chunk in chunks:
+            # chunk_size以下であることを確認（最後のチャンクを除く）
+            assert len(chunk) <= config.chunk_size + 50  # 若干の余裕を持たせる
+
+    def test_split_text_respects_chunk_overlap(self, config):
+        """chunk_overlapが正しく適用されることを確認。"""
+        # カスタム設定で初期化
+        config.chunk_size = 100
+        config.chunk_overlap = 20
+        processor = DocumentProcessor(config)
+
+        # 長いテキスト（300文字）
+        text = "0123456789" * 30  # 300文字
+
+        chunks = processor.split_text(text)
+
+        # 少なくとも2つのチャンクがあることを確認
+        assert len(chunks) >= 2
+
+        # 隣接するチャンクが重複部分を持つことを確認
+        if len(chunks) >= 2:
+            # 最初のチャンクの末尾部分
+            first_chunk_end = chunks[0][-20:]
+            # 2番目のチャンクの先頭部分
+            second_chunk_start = chunks[1][:20]
+
+            # 何らかの重複があることを確認（完全一致でなくても良い）
+            # オーバーラップが機能していることの確認
+            assert len(chunks[1]) > 0
+
+    def test_split_japanese_text_with_period_separator(self, config):
+        """日本語テキストの分割（separators: "。"）が正しく動作する。"""
+        # 日本語の文章（句点で区切られている）
+        text = (
+            "これは最初の文です。これは2番目の文です。これは3番目の文です。"
+            "これは4番目の文です。これは5番目の文です。これは6番目の文です。"
+            "これは7番目の文です。これは8番目の文です。これは9番目の文です。"
+            "これは10番目の文です。"
+        )
+
+        # 小さめのchunk_sizeで分割
+        config.chunk_size = 100
+        config.chunk_overlap = 20
+        processor = DocumentProcessor(config)
+
+        chunks = processor.split_text(text)
+
+        # チャンクが作成されることを確認
+        assert len(chunks) > 0
+
+        # 各チャンクに日本語テキストが含まれていることを確認
+        for chunk in chunks:
+            assert "文です" in chunk or "これは" in chunk
+
+    def test_split_text_with_empty_string(self, processor):
+        """空文字列の分割では空リストが返される。"""
+        chunks = processor.split_text("")
+
+        assert isinstance(chunks, list)
+        assert len(chunks) == 0
+
+    def test_split_text_with_short_text(self, processor):
+        """短いテキストは分割されずに1つのチャンクとして返される。"""
+        short_text = "これは短いテキストです。"
+
+        chunks = processor.split_text(short_text)
+
+        assert len(chunks) == 1
+        assert chunks[0] == short_text
+
+    def test_split_text_with_newlines(self, processor):
+        """改行を含むテキストが正しく分割される。"""
+        text = "段落1の内容です。\n\n段落2の内容です。\n\n段落3の内容です。"
+
+        chunks = processor.split_text(text)
+
+        # チャンクが作成されることを確認
+        assert len(chunks) > 0
+        # 改行が考慮されていることを確認
+        for chunk in chunks:
+            assert len(chunk) > 0

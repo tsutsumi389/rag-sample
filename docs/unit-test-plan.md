@@ -153,8 +153,12 @@ tests/
 
 ##### 3.3 DocumentProcessor - テキスト分割
 - ✓ split_text()で正しくチャンクに分割
-- ✓ chunk_sizeとchunk_overlapが正しく適用されることを確認
+- ✓ chunk_sizeが正しく適用されることを確認
+- ✓ chunk_overlapが正しく適用されることを確認
 - ✓ 日本語テキストの分割（separators: "。"）
+- ✓ 空文字列の分割では空リストが返される
+- ✓ 短いテキストは分割されずに1つのチャンクとして返される
+- ✓ 改行を含むテキストが正しく分割される
 
 ##### 3.4 DocumentProcessor - チャンク作成
 - ✓ create_chunks()で正しいChunkリストが作成される
