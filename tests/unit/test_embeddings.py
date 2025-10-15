@@ -247,3 +247,88 @@ class TestEmbeddingGeneratorDimension:
 
             # embed_queryが"sample text"で呼ばれたことを確認
             mock_embeddings_instance.embed_query.assert_called_once_with("sample text")
+
+
+class TestCreateEmbeddingGenerator:
+    """便利関数のテスト"""
+
+    def test_create_embedding_generator_with_defaults(self):
+        """create_embedding_generator()でデフォルト設定のインスタンスが作成される"""
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = create_embedding_generator()
+
+            # EmbeddingGeneratorインスタンスであることを確認
+            assert isinstance(generator, EmbeddingGenerator)
+
+            # 設定ファイルの値が使用されていることを確認
+            # (環境により異なるため、型と存在のみを確認)
+            assert isinstance(generator.model_name, str)
+            assert len(generator.model_name) > 0
+            assert isinstance(generator.base_url, str)
+            assert len(generator.base_url) > 0
+
+    def test_create_embedding_generator_with_custom_model(self):
+        """create_embedding_generator()でカスタムモデル名のインスタンスが作成される"""
+        custom_model = "custom-embedding-model"
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = create_embedding_generator(model_name=custom_model)
+
+            # カスタムモデル名が使用されていることを確認
+            assert isinstance(generator, EmbeddingGenerator)
+            assert generator.model_name == custom_model
+
+            # OllamaEmbeddingsがカスタムモデルで呼ばれたことを確認
+            call_args = mock_ollama.call_args
+            assert call_args is not None
+            assert call_args.kwargs["model"] == custom_model
+
+    def test_create_embedding_generator_with_custom_base_url(self):
+        """create_embedding_generator()でカスタムbase_urlのインスタンスが作成される"""
+        custom_url = "http://custom-ollama:9999"
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = create_embedding_generator(base_url=custom_url)
+
+            # カスタムbase_urlが使用されていることを確認
+            assert isinstance(generator, EmbeddingGenerator)
+            assert generator.base_url == custom_url
+
+            # OllamaEmbeddingsがカスタムbase_urlで呼ばれたことを確認
+            call_args = mock_ollama.call_args
+            assert call_args is not None
+            assert call_args.kwargs["base_url"] == custom_url
+
+    def test_create_embedding_generator_with_both_custom_params(self):
+        """create_embedding_generator()で両方のカスタムパラメータのインスタンスが作成される"""
+        custom_model = "test-model"
+        custom_url = "http://test:8080"
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = create_embedding_generator(
+                model_name=custom_model,
+                base_url=custom_url
+            )
+
+            # 両方のカスタムパラメータが使用されていることを確認
+            assert isinstance(generator, EmbeddingGenerator)
+            assert generator.model_name == custom_model
+            assert generator.base_url == custom_url
+
+            # OllamaEmbeddingsが正しいパラメータで呼ばれたことを確認
+            mock_ollama.assert_called_once_with(
+                model=custom_model,
+                base_url=custom_url
+            )
