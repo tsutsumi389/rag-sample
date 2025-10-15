@@ -223,3 +223,27 @@ class TestEmbeddingGeneratorQueryEmbedding:
 
             error_message = str(exc_info.value)
             assert "text cannot be empty" in error_message
+
+
+class TestEmbeddingGeneratorDimension:
+    """EmbeddingGenerator - 次元数取得のテスト"""
+
+    def test_get_embedding_dimension_returns_correct_dimension(self):
+        """get_embedding_dimension()で正しい次元数が返される（モック）"""
+        # 768次元のベクトルを模擬
+        mock_vector = [0.1] * 768
+
+        with patch("src.rag.embeddings.OllamaEmbeddings") as mock_ollama:
+            mock_embeddings_instance = Mock()
+            mock_embeddings_instance.embed_query.return_value = mock_vector
+            mock_ollama.return_value = mock_embeddings_instance
+
+            generator = EmbeddingGenerator()
+            dimension = generator.get_embedding_dimension()
+
+            # 次元数の確認
+            assert dimension == 768
+            assert isinstance(dimension, int)
+
+            # embed_queryが"sample text"で呼ばれたことを確認
+            mock_embeddings_instance.embed_query.assert_called_once_with("sample text")
