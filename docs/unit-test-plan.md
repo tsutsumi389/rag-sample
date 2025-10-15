@@ -249,9 +249,9 @@ tests/
 - ✅ LLM初期化失敗時にRAGEngineErrorがraise（モック）
 
 ##### 6.2 RAGEngine - 検索
-- ✓ retrieve()で正しいSearchResultリストが返される（モック）
-- ✓ 空クエリでRAGEngineErrorがraise
-- ✓ n_results/whereパラメータが正しく渡される（モック）
+- ✅ retrieve()で正しいSearchResultリストが返される（モック）
+- ✅ 空クエリでRAGEngineErrorがraise
+- ✅ n_results/whereパラメータが正しく渡される（モック）
 
 ##### 6.3 RAGEngine - 回答生成
 - ✓ generate_answer()で正しい回答辞書が返される（モック）

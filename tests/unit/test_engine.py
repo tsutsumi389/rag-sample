@@ -13,6 +13,7 @@ from src.rag.engine import (
     create_rag_engine
 )
 from src.utils.config import Config
+from src.models.document import SearchResult, Chunk
 
 
 class TestRAGEngineInitialization:
@@ -243,3 +244,200 @@ class TestCreateRAGEngine:
                 llm_model=custom_model
             )
             assert result == mock_engine
+
+
+class TestRAGEngineRetrieve:
+    """RAGEngine - 検索のテスト"""
+
+    def test_retrieve_returns_search_results(self):
+        """retrieve()で正しいSearchResultリストが返される（モック）"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+
+        # 検索結果のモックデータ
+        mock_chunk = Chunk(
+            content="これはテストドキュメントです。",
+            chunk_id="chunk_001",
+            document_id="doc_001",
+            chunk_index=0,
+            start_char=0,
+            end_char=16,
+            metadata={"source": "test.txt"}
+        )
+        mock_search_results = [
+            SearchResult(
+                chunk=mock_chunk,
+                score=0.95,
+                document_name="test.txt",
+                document_source="/path/to/test.txt",
+                rank=1
+            )
+        ]
+
+        # 埋め込みベクトルのモック
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+
+        # ベクトルストアの検索結果をモック
+        mock_vector_store.search.return_value = mock_search_results
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM"):
+
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 検索実行
+            query = "テストクエリ"
+            results = engine.retrieve(query)
+
+            # 結果の検証
+            assert results == mock_search_results
+            assert len(results) == 1
+            assert results[0].score == 0.95
+            assert results[0].document_name == "test.txt"
+
+            # embed_queryが正しく呼ばれたことを確認
+            mock_embedding_generator.embed_query.assert_called_once_with(query)
+
+            # vector_store.searchが正しいパラメータで呼ばれたことを確認
+            mock_vector_store.search.assert_called_once_with(
+                query_embedding=mock_query_embedding,
+                n_results=5,
+                where=None
+            )
+
+    def test_retrieve_with_empty_query_raises_error(self):
+        """空クエリでRAGEngineErrorがraise"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM"):
+
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # 空のクエリでエラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.retrieve("")
+
+            assert "検索クエリが空です" in str(exc_info.value)
+
+            # 空白のみのクエリでもエラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.retrieve("   ")
+
+            assert "検索クエリが空です" in str(exc_info.value)
+
+            # embed_queryとsearchが呼ばれていないことを確認
+            mock_embedding_generator.embed_query.assert_not_called()
+            mock_vector_store.search.assert_not_called()
+
+    def test_retrieve_passes_n_results_and_where_parameters(self):
+        """n_results/whereパラメータが正しく渡される（モック）"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+
+        # 検索結果のモック
+        mock_search_results = []
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.return_value = mock_search_results
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM"):
+
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # カスタムパラメータで検索実行
+            query = "テストクエリ"
+            n_results = 10
+            where = {"document_id": "doc123"}
+
+            results = engine.retrieve(query, n_results=n_results, where=where)
+
+            # 結果の検証
+            assert results == mock_search_results
+
+            # vector_store.searchがカスタムパラメータで呼ばれたことを確認
+            mock_vector_store.search.assert_called_once_with(
+                query_embedding=mock_query_embedding,
+                n_results=n_results,
+                where=where
+            )
+
+    def test_retrieve_handles_embedding_error(self):
+        """埋め込み生成エラー時にRAGEngineErrorがraise"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+
+        # embed_queryで例外を発生させる
+        mock_embedding_generator.embed_query.side_effect = Exception("Embedding failed")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM"):
+
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.retrieve("テストクエリ")
+
+            error_message = str(exc_info.value)
+            assert "ドキュメントの検索に失敗しました" in error_message
+            assert "Embedding failed" in error_message
+
+            # vector_store.searchが呼ばれていないことを確認
+            mock_vector_store.search.assert_not_called()
+
+    def test_retrieve_handles_vector_store_error(self):
+        """ベクトルストア検索エラー時にRAGEngineErrorがraise"""
+        # モックの準備
+        mock_vector_store = Mock()
+        mock_embedding_generator = Mock()
+
+        # 埋め込みは成功するが、検索で失敗
+        mock_query_embedding = [0.1, 0.2, 0.3]
+        mock_embedding_generator.embed_query.return_value = mock_query_embedding
+        mock_vector_store.search.side_effect = Exception("Vector store search failed")
+
+        # RAGEngineの初期化
+        with patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.EmbeddingGenerator"), \
+             patch("src.rag.engine.OllamaLLM"):
+
+            engine = RAGEngine(
+                vector_store=mock_vector_store,
+                embedding_generator=mock_embedding_generator
+            )
+
+            # エラーが発生することを確認
+            with pytest.raises(RAGEngineError) as exc_info:
+                engine.retrieve("テストクエリ")
+
+            error_message = str(exc_info.value)
+            assert "ドキュメントの検索に失敗しました" in error_message
+            assert "Vector store search failed" in error_message
