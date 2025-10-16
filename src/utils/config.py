@@ -24,7 +24,7 @@ class Config:
 
     # デフォルト値
     DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
-    DEFAULT_OLLAMA_LLM_MODEL = "llama3.2"
+    DEFAULT_OLLAMA_LLM_MODEL = "gpt-oss"
     DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
     DEFAULT_CHROMA_PERSIST_DIRECTORY = "./chroma_db"
     DEFAULT_CHUNK_SIZE = 1000

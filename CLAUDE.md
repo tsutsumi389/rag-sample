@@ -9,7 +9,7 @@ RAG (Retrieval-Augmented Generation) CLI application using Python + Ollama + Lan
 ## Tech Stack
 
 - **Python 3.13+** with uv package manager
-- **Ollama** - Local LLM execution (llama3.2 for generation, nomic-embed-text for embeddings)
+- **Ollama** - Local LLM execution (gpt-oss for generation, nomic-embed-text for embeddings)
 - **LangChain** - LLM application framework (langchain, langchain-community, langchain-ollama)
 - **ChromaDB** - Vector database (runs embedded, no separate server needed)
 - **Click** - CLI framework
@@ -62,7 +62,7 @@ uv run pytest tests/unit/test_engine.py -v
 ### Ollama Prerequisites
 The application requires Ollama to be running locally with these models:
 ```bash
-ollama pull llama3.2          # LLM for answer generation
+ollama pull gpt-oss           # LLM for answer generation
 ollama pull nomic-embed-text  # Embedding model
 ```
 
@@ -120,7 +120,7 @@ User Question → Embed Query (embeddings) → Search Similar Chunks (vector_sto
 ### Configuration Management
 Environment variables (via `.env` file):
 - `OLLAMA_BASE_URL` - Ollama API endpoint (default: http://localhost:11434)
-- `OLLAMA_LLM_MODEL` - Model for text generation (default: llama3.2)
+- `OLLAMA_LLM_MODEL` - Model for text generation (default: gpt-oss)
 - `OLLAMA_EMBEDDING_MODEL` - Model for embeddings (default: nomic-embed-text)
 - `CHROMA_PERSIST_DIRECTORY` - ChromaDB storage path (default: ./chroma_db)
 - `CHUNK_SIZE` - Text chunk size (default: 1000)

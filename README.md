@@ -18,7 +18,7 @@ Python + Ollama + LangChain + ChromaDBを使用したRAG（Retrieval-Augmented G
 
 - **言語**: Python 3.13+
 - **パッケージ管理**: uv
-- **LLM**: Ollama (llama3.2)
+- **LLM**: Ollama (gpt-oss)
 - **埋め込みモデル**: nomic-embed-text
 - **ベクトルDB**: ChromaDB (組み込み型、サーバー不要)
 - **ライブラリ**: LangChain, Click, Rich
@@ -85,7 +85,7 @@ ollama serve  # バックグラウンドで実行されます
 
 # 別のターミナルで以下を実行
 # LLMモデル（回答生成用）
-ollama pull llama3.2
+ollama pull gpt-oss
 
 # 埋め込みモデル（ベクトル化用）
 ollama pull nomic-embed-text
@@ -94,7 +94,7 @@ ollama pull nomic-embed-text
 **モデルの確認:**
 ```bash
 ollama list
-# llama3.2 と nomic-embed-text が表示されることを確認
+# gpt-oss と nomic-embed-text が表示されることを確認
 ```
 
 #### 3. 依存パッケージのインストール
@@ -127,7 +127,7 @@ uv run rag status
 # 以下のような出力が表示されればOK:
 # ✓ Ollama接続: 正常
 # ✓ ベクトルDB: 正常
-# ✓ モデル: llama3.2, nomic-embed-text
+# ✓ モデル: gpt-oss, nomic-embed-text
 ```
 
 **トラブルシューティング:**
@@ -361,7 +361,7 @@ uv run rag config
 
 [Ollama設定]
   • ベースURL: http://localhost:11434
-  • LLMモデル: llama3.2
+  • LLMモデル: gpt-oss
   • 埋め込みモデル: nomic-embed-text
 
 [チャンク設定]
@@ -400,7 +400,7 @@ uv run rag status
 
 ✓ Ollama接続: 正常
 ✓ ベクトルDB: 正常
-✓ LLMモデル (llama3.2): 利用可能
+✓ LLMモデル (gpt-oss): 利用可能
 ✓ 埋め込みモデル (nomic-embed-text): 利用可能
 
 統計情報:
@@ -425,7 +425,7 @@ nano .env
 ```env
 # Ollama設定
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_LLM_MODEL=llama3.2
+OLLAMA_LLM_MODEL=gpt-oss
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 
 # ChromaDB設定
@@ -547,7 +547,7 @@ brew install ollama  # macOS
 **Q: モデルのダウンロードが遅い**
 ```bash
 # ダウンロード進捗が確認できます
-ollama pull llama3.2
+ollama pull gpt-oss
 
 # 別のターミナルでログを確認
 tail -f ~/.ollama/logs/server.log
