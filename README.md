@@ -3,12 +3,24 @@
 Python + Ollama + LangChain + ChromaDBを使用したRAG（Retrieval-Augmented Generation）システムのCLIアプリケーションです。
 ローカルのドキュメントをベクトルデータベースに格納し、自然言語での質問に対して関連情報を検索・生成して回答します。
 
+[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+## 特徴
+
+- **完全ローカル実行** - インターネット接続不要、データは外部に送信されません
+- **柔軟なドキュメント管理** - TXT、PDF、Markdownなど多様なファイル形式に対応
+- **高速な検索** - ChromaDBによる効率的なベクトル検索
+- **対話的なチャット** - 会話履歴を考慮した継続的な対話が可能
+- **カスタマイズ可能** - チャンクサイズ、モデル、検索パラメータなど細かく調整可能
+
 ## 技術スタック
 
 - **言語**: Python 3.13+
+- **パッケージ管理**: uv
 - **LLM**: Ollama (llama3.2)
 - **埋め込みモデル**: nomic-embed-text
-- **ベクトルDB**: ChromaDB
+- **ベクトルDB**: ChromaDB (組み込み型、サーバー不要)
 - **ライブラリ**: LangChain, Click, Rich
 
 ## 目次
@@ -25,6 +37,7 @@ Python + Ollama + LangChain + ChromaDBを使用したRAG（Retrieval-Augmented G
   - [質問と検索](#質問と検索)
   - [システム設定](#システム設定)
 - [設定のカスタマイズ](#設定のカスタマイズ)
+- [開発者向け情報](#開発者向け情報)
 
 ## セットアップ
 
@@ -117,9 +130,13 @@ uv run rag status
 # ✓ モデル: llama3.2, nomic-embed-text
 ```
 
+**トラブルシューティング:**
+- Ollama接続エラーの場合: `ollama serve` が実行中か確認
+- モデルが見つからない場合: `ollama list` でモデルがダウンロード済みか確認
+
 ### セットアップ完了！
 
-これでRAG CLIアプリケーションを使用する準備が整いました。
+これでRAG CLIアプリケーションを使用する準備が整いました。[使い方](#使い方)セクションに進んでください。
 
 ---
 
@@ -426,3 +443,159 @@ LOG_LEVEL=INFO
 ```
 
 設定変更後、再起動は不要です。次回実行時に自動的に反映されます。
+
+---
+
+## 開発者向け情報
+
+### プロジェクト構成
+
+```
+rag-sample/
+├── src/
+│   ├── cli.py                  # CLIエントリーポイント
+│   ├── commands/               # コマンド実装
+│   │   ├── document.py        # ドキュメント管理
+│   │   ├── query.py           # 質問・検索
+│   │   └── config.py          # 設定管理
+│   ├── rag/                    # RAGコア機能
+│   │   ├── vector_store.py    # ChromaDB操作
+│   │   ├── embeddings.py      # 埋め込み生成
+│   │   ├── document_processor.py  # ドキュメント処理
+│   │   └── engine.py          # RAGエンジン
+│   ├── models/                 # データモデル
+│   │   └── document.py
+│   └── utils/                  # ユーティリティ
+│       └── config.py
+├── tests/
+│   ├── unit/                   # ユニットテスト
+│   └── integration/            # 統合テスト
+├── docs/                       # ドキュメント
+├── CLAUDE.md                   # Claude Code用プロジェクト指示
+└── pyproject.toml              # プロジェクト設定
+```
+
+### 開発環境のセットアップ
+
+```bash
+# 開発用依存関係を含めてインストール
+uv sync --all-extras
+
+# または個別に
+uv add --dev pytest pytest-cov pytest-mock
+```
+
+### テストの実行
+
+```bash
+# 全テストを実行
+uv run pytest
+
+# カバレッジレポート付き
+uv run pytest --cov=src --cov-report=html
+
+# ユニットテストのみ
+uv run pytest tests/unit/ -v
+
+# 統合テストのみ（Ollamaが必要）
+uv run pytest tests/integration/ -v
+
+# 特定のテストファイル
+uv run pytest tests/unit/test_engine.py -v
+```
+
+**テストの種類:**
+- **ユニットテスト** (`tests/unit/`) - 外部依存なし、モックを使用
+- **統合テスト** (`tests/integration/`) - 実際のOllamaとChromaDBを使用
+
+### コードスタイル
+
+このプロジェクトでは以下のコーディング規約に従っています:
+
+- **Python 3.13+** の型ヒントを使用 (`dict[str, Any]` など)
+- **日本語のコメントとdocstring** - すべてのドキュメントは日本語で記述
+- **Google-style docstrings** - パラメータと戻り値を明確に記述
+- **依存性注入パターン** - テストしやすい設計
+
+### 新機能の追加
+
+1. **新しいコマンドを追加する場合:**
+   - `src/commands/` に実装を追加
+   - `src/cli.py` でコマンドを登録
+   - `tests/unit/` にテストを追加
+
+2. **RAGコアを変更する場合:**
+   - `src/rag/` の該当モジュールを編集
+   - ユニットテストを更新
+   - 統合テストで動作確認
+
+詳細は [CLAUDE.md](CLAUDE.md) を参照してください。
+
+---
+
+## トラブルシューティング
+
+### よくある問題と解決方法
+
+**Q: `ollama: command not found` エラーが出る**
+```bash
+# Ollamaをインストール
+brew install ollama  # macOS
+# または https://ollama.ai/ から手動インストール
+```
+
+**Q: モデルのダウンロードが遅い**
+```bash
+# ダウンロード進捗が確認できます
+ollama pull llama3.2
+
+# 別のターミナルでログを確認
+tail -f ~/.ollama/logs/server.log
+```
+
+**Q: `uv run rag` で "No module named 'src'" エラー**
+```bash
+# 依存関係を再インストール
+uv sync --reinstall
+```
+
+**Q: ドキュメント追加時にメモリエラー**
+```bash
+# チャンクサイズを小さくする
+uv run rag config set chunk_size 500
+uv run rag config set chunk_overlap 50
+```
+
+**Q: 回答の精度が低い**
+- `TOP_K` を増やして参照ドキュメントを増やす
+- チャンクサイズを調整（小さすぎると文脈が失われる）
+- より高性能なLLMモデルを使用（llama3.1など）
+
+**Q: Ollamaの接続エラー**
+```bash
+# Ollamaが起動しているか確認
+curl http://localhost:11434/api/tags
+
+# 起動していない場合
+ollama serve &
+
+# ポートを変更した場合
+uv run rag config set ollama_base_url http://localhost:YOUR_PORT
+```
+
+### ログの確認
+
+詳細なログを確認するには:
+```bash
+# 詳細ログを有効化
+uv run rag --verbose <command>
+
+# または .env で設定
+echo "LOG_LEVEL=DEBUG" >> .env
+```
+
+---
+
+## ライセンス
+
+MIT License - 詳細は [LICENSE](LICENSE) を参照してください。

@@ -28,11 +28,35 @@ source .venv/bin/activate  # macOS/Linux
 
 ### Running the Application
 ```bash
-# Run main CLI (when implemented)
+# Run main CLI
 uv run python src/cli.py [command]
 
 # Or use as installed package
 uv run rag-cli [command]
+
+# Example commands
+uv run rag-cli init                    # Initialize configuration
+uv run rag-cli add ./docs              # Add documents from directory
+uv run rag-cli query "your question"   # Query the knowledge base
+uv run rag-cli chat                    # Start interactive chat session
+```
+
+### Running Tests
+```bash
+# Run all tests
+uv run pytest
+
+# Run unit tests only
+uv run pytest tests/unit/
+
+# Run integration tests only
+uv run pytest tests/integration/
+
+# Run with coverage report
+uv run pytest --cov=src --cov-report=term-missing
+
+# Run specific test file
+uv run pytest tests/unit/test_engine.py -v
 ```
 
 ### Ollama Prerequisites
@@ -105,9 +129,43 @@ Environment variables (via `.env` file):
 
 ## Implementation Status
 
-The project structure is currently planned but not yet implemented. See `docs/implementation-plan.md` for the full implementation roadmap with 11 tasks across 4 phases.
+✅ **Phase 1-3: Core Implementation Complete**
+- All core RAG modules are implemented and tested
+- CLI interface with document, query, and config commands
+- Comprehensive unit and integration test coverage
 
-Current state: Empty `main.py` placeholder exists. All `src/` modules need to be created.
+**Implemented Components:**
+
+*CLI Layer:*
+- [src/cli.py](src/cli.py) - Main CLI entry point with Click groups
+- [src/commands/document.py](src/commands/document.py) - Document management (add, remove, list, clear)
+- [src/commands/query.py](src/commands/query.py) - Query operations (query, search, chat)
+- [src/commands/config.py](src/commands/config.py) - Configuration commands (init, status, config)
+
+*RAG Core:*
+- [src/rag/vector_store.py](src/rag/vector_store.py) - ChromaDB vector operations
+- [src/rag/embeddings.py](src/rag/embeddings.py) - Ollama embedding generation
+- [src/rag/document_processor.py](src/rag/document_processor.py) - Document loading and chunking
+- [src/rag/engine.py](src/rag/engine.py) - RAG orchestration with chat history support
+
+*Data Models:*
+- [src/models/document.py](src/models/document.py) - Document, Chunk, SearchResult, ChatMessage models
+
+*Utilities:*
+- [src/utils/config.py](src/utils/config.py) - Configuration management with .env support
+
+**Test Coverage:**
+- Unit tests for all core modules ([tests/unit/](tests/unit/))
+- Ollama integration tests ([tests/integration/test_ollama_integration.py](tests/integration/test_ollama_integration.py))
+- Full RAG flow end-to-end tests ([tests/integration/test_full_rag_flow.py](tests/integration/test_full_rag_flow.py))
+- Pytest fixtures for common test setup ([tests/conftest.py](tests/conftest.py))
+
+**Current Branch:** `feature/unit_test` (merged to main)
+
+**Next Steps:**
+- Performance optimization and production hardening
+- Additional CLI features (export, import, batch operations)
+- Documentation and user guides
 
 ## Development Guidelines
 
@@ -135,6 +193,15 @@ Use `dataclasses` or `pydantic` for data models. Include metadata for:
 - Document: file path, name, type, timestamp, source
 - Chunk: text content, metadata, document reference
 - SearchResult: chunk, similarity score, source document
+
+### Testing Guidelines
+- Write unit tests for all core functionality using pytest
+- Use mocks (`unittest.mock`) to isolate components from external dependencies
+- Integration tests should verify actual Ollama and ChromaDB interactions
+- Use fixtures in [tests/conftest.py](tests/conftest.py) for common test setup
+- Test error handling and edge cases (empty inputs, connection failures, etc.)
+- Maintain high test coverage (aim for >80%)
+- Run tests before committing: `uv run pytest`
 
 ## Common Patterns
 
