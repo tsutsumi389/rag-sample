@@ -114,7 +114,7 @@ class DocumentProcessor:
             timestamp=datetime.now(),
             metadata={
                 'file_size': path.stat().st_size,
-                'file_modified': datetime.fromtimestamp(path.stat().st_mtime),
+                'file_modified': datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
                 'encoding': 'utf-8' if doc_type in ['txt', 'md'] else 'binary',
             }
         )
