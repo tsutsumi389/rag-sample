@@ -321,19 +321,19 @@ MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5   # 画像検索の重み
 #### タスク
 
 1. **コマンド実装**
-   - [ ] `add-image` コマンド実装
-   - [ ] `list-images` コマンド実装
-   - [ ] `remove-image` コマンド実装
-   - [ ] `search-images` コマンド実装
+   - [x] `add-image` コマンド実装
+   - [x] `list-images` コマンド実装
+   - [x] `remove-image` コマンド実装
+   - [x] `search-images` コマンド実装
 
 2. **検索機能**
-   - [ ] テキストクエリ → 画像埋め込み → 類似画像検索
-   - [ ] 検索結果の整形（Rich テーブル表示）
-   - [ ] 画像パス、キャプション、スコア表示
+   - [x] テキストクエリ → 画像埋め込み → 類似画像検索
+   - [x] 検索結果の整形（Rich テーブル表示）
+   - [x] 画像パス、キャプション、スコア表示
 
 3. **統合テスト**
-   - [ ] `tests/integration/test_image_search.py`
-   - [ ] 画像追加 → 検索 → 取得のエンドツーエンドテスト
+   - [x] `tests/integration/test_image_search.py`
+   - [x] 画像追加 → 検索 → 取得のエンドツーエンドテスト
 
 **完了基準**:
 - `rag add-image ./images` で画像を追加できる
