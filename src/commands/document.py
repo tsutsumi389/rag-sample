@@ -20,6 +20,8 @@ from ..rag.document_processor import (
     UnsupportedFileTypeError,
 )
 from ..rag.embeddings import EmbeddingGenerator, EmbeddingError
+from ..rag.vision_embeddings import VisionEmbeddings, VisionEmbeddingError
+from ..rag.image_processor import ImageProcessor, ImageProcessorError
 from ..utils.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -408,6 +410,450 @@ def clear_command(yes: bool, verbose: bool):
             f"\n[green]✓[/green] すべてのドキュメントを削除しました"
         )
         console.print(f"  削除されたチャンク数: {document_count}")
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+# =============================================================================
+# 画像管理コマンド
+# =============================================================================
+
+
+@click.command('add-image')
+@click.argument('image_path', type=click.Path(exists=True))
+@click.option(
+    '--caption',
+    '-c',
+    type=str,
+    default=None,
+    help='画像のキャプション（省略時は自動生成）',
+)
+@click.option(
+    '--tags',
+    '-t',
+    type=str,
+    default=None,
+    help='カンマ区切りのタグ（例: tag1,tag2,tag3）',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def add_image_command(image_path: str, caption: Optional[str], tags: Optional[str], verbose: bool):
+    """画像をベクトルストアに追加
+
+    画像ファイルまたはディレクトリを読み込み、
+    ビジョン埋め込みを生成してベクトルストアに保存します。
+
+    Args:
+        image_path: 追加する画像ファイルまたはディレクトリのパス
+        caption: 画像のキャプション（省略時は自動生成）
+        tags: カンマ区切りのタグ
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # 設定の読み込み
+            config = get_config()
+
+            # コンポーネントの初期化
+            task = progress.add_task("初期化中...", total=None)
+            vector_store = VectorStore(config)
+            vector_store.initialize()
+
+            vision_embeddings = VisionEmbeddings(config)
+            image_processor = ImageProcessor(vision_embeddings, config)
+            progress.update(task, description="初期化完了")
+
+            # パスの処理
+            path = Path(image_path)
+
+            # タグの処理
+            tag_list = [tag.strip() for tag in tags.split(',')] if tags else []
+
+            # 画像の読み込み
+            if path.is_file():
+                progress.update(task, description=f"画像を読み込み中: {path.name}")
+                images = [image_processor.load_image(str(path), custom_caption=caption, tags=tag_list)]
+            elif path.is_dir():
+                progress.update(task, description=f"ディレクトリから画像を読み込み中: {path.name}")
+                images = image_processor.load_images_from_directory(
+                    str(path),
+                    custom_caption=caption,
+                    tags=tag_list
+                )
+                if not images:
+                    console.print(f"[yellow]警告:[/yellow] {path} に画像ファイルが見つかりませんでした")
+                    return
+            else:
+                console.print(f"[red]✗ エラー:[/red] 無効なパス: {image_path}", style="bold red")
+                raise click.Abort()
+
+            if verbose:
+                console.print(f"\n[cyan]画像情報:[/cyan]")
+                console.print(f"  読み込み画像数: {len(images)}")
+                for img in images[:5]:  # 最初の5件のみ表示
+                    console.print(f"    - {img.file_name} ({img.image_type.upper()})")
+                if len(images) > 5:
+                    console.print(f"    ... 他 {len(images) - 5} 件")
+
+            # 埋め込みの生成
+            progress.update(task, description=f"{len(images)}個の画像の埋め込みを生成中...")
+            image_paths = [img.file_path for img in images]
+            embeddings = vision_embeddings.embed_images(image_paths)
+
+            # ベクトルストアに追加
+            progress.update(task, description="ベクトルストアに追加中...")
+            image_ids = vector_store.add_images(images, embeddings)
+
+            progress.update(task, description="完了", completed=True)
+
+        # 成功メッセージ
+        console.print(f"\n[green]✓[/green] {len(images)}個の画像を正常に追加しました")
+        if verbose and len(images) > 0:
+            console.print(f"  最初の画像ID: {image_ids[0]}")
+            console.print(f"  追加された画像数: {len(image_ids)}")
+
+    except ImageProcessorError as e:
+        console.print(f"[red]✗ 画像処理エラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("画像処理エラーの詳細")
+        raise click.Abort()
+
+    except VisionEmbeddingError as e:
+        console.print(f"[red]✗ ビジョン埋め込みエラー:[/red] {e}", style="bold red")
+        console.print("\n[yellow]ヒント:[/yellow]")
+        console.print("  1. Ollamaが起動しているか確認してください")
+        console.print("  2. ビジョンモデルがインストールされているか確認してください")
+        console.print("     $ ollama pull llava")
+        if verbose:
+            logger.exception("ビジョン埋め込みエラーの詳細")
+        raise click.Abort()
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+@click.command('list-images')
+@click.option(
+    '--limit',
+    '-l',
+    type=int,
+    default=None,
+    help='表示する画像数の上限',
+)
+@click.option(
+    '--format',
+    '-f',
+    type=click.Choice(['table', 'json']),
+    default='table',
+    help='出力フォーマット',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def list_images_command(limit: Optional[int], format: str, verbose: bool):
+    """ベクトルストア内の画像一覧を表示
+
+    登録されているすべての画像の情報を表形式またはJSON形式で表示します。
+
+    Args:
+        limit: 表示する画像数の上限
+        format: 出力フォーマット（table または json）
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        # 設定の読み込み
+        config = get_config()
+
+        # ベクトルストアの初期化
+        vector_store = VectorStore(config)
+        vector_store.initialize()
+
+        # 画像一覧の取得
+        images = vector_store.list_images(limit=limit)
+
+        if not images:
+            console.print("[yellow]ベクトルストアに画像がありません[/yellow]")
+            console.print("\n画像を追加するには:")
+            console.print("  $ rag-cli add-image <image_path>")
+            return
+
+        # JSON形式で出力
+        if format == 'json':
+            import json
+            output = []
+            for img in images:
+                output.append({
+                    'id': img['id'],
+                    'file_name': img['file_name'],
+                    'file_path': img['file_path'],
+                    'image_type': img['image_type'],
+                    'caption': img['caption'],
+                    'tags': img.get('tags', []),
+                    'created_at': img['created_at'],
+                })
+            console.print(json.dumps(output, ensure_ascii=False, indent=2))
+            return
+
+        # テーブル形式で出力
+        table = Table(title=f"画像一覧 (総数: {len(images)})")
+        table.add_column("ファイル名", style="cyan", no_wrap=True)
+        table.add_column("タイプ", style="magenta")
+        table.add_column("キャプション", style="green")
+
+        if verbose:
+            table.add_column("画像ID", style="dim")
+            table.add_column("タグ", style="yellow")
+            table.add_column("作成日時", style="dim")
+
+        # 画像情報を追加
+        for img in images:
+            # キャプションを短縮
+            caption = img['caption']
+            if len(caption) > 50:
+                caption = caption[:47] + "..."
+
+            row = [
+                img['file_name'],
+                img['image_type'].upper(),
+                caption,
+            ]
+
+            if verbose:
+                tags_str = ", ".join(img.get('tags', []))
+                row.extend([
+                    img['id'][:8] + "...",  # IDの最初の8文字のみ表示
+                    tags_str if tags_str else "-",
+                    img['created_at'][:19],  # 秒まで表示
+                ])
+
+            table.add_row(*row)
+
+        # テーブルの表示
+        console.print()
+        console.print(table)
+
+        # 統計情報の表示
+        if verbose:
+            console.print(f"\n[cyan]統計情報:[/cyan]")
+            console.print(f"  総画像数: {len(images)}")
+
+            # 画像タイプの集計
+            type_counts = {}
+            for img in images:
+                img_type = img['image_type']
+                type_counts[img_type] = type_counts.get(img_type, 0) + 1
+
+            console.print(f"  画像タイプ別:")
+            for img_type, count in type_counts.items():
+                console.print(f"    {img_type.upper()}: {count}")
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+@click.command('remove-image')
+@click.argument('image_id', type=str)
+@click.option(
+    '--yes',
+    '-y',
+    is_flag=True,
+    help='確認をスキップ',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def remove_image_command(image_id: str, yes: bool, verbose: bool):
+    """画像をベクトルストアから削除
+
+    指定された画像IDの画像を削除します。
+
+    Args:
+        image_id: 削除する画像のID
+        yes: 確認をスキップするか
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        # 設定の読み込み
+        config = get_config()
+
+        # ベクトルストアの初期化
+        vector_store = VectorStore(config)
+        vector_store.initialize()
+
+        # 画像の存在確認
+        image = vector_store.get_image_by_id(image_id)
+
+        if not image:
+            console.print(
+                f"[yellow]警告:[/yellow] 画像ID '{image_id}' が見つかりませんでした",
+                style="bold yellow"
+            )
+            if verbose:
+                console.print("\n利用可能な画像IDを確認するには:")
+                console.print("  $ rag-cli list-images -v")
+            raise click.Abort()
+
+        # 削除確認
+        if not yes:
+            console.print(f"\n削除する画像:")
+            console.print(f"  ファイル名: {image['file_name']}")
+            console.print(f"  パス: {image['file_path']}")
+            console.print(f"  キャプション: {image['caption'][:50]}...")
+
+            if not click.confirm("\n本当に削除しますか?", default=False):
+                console.print("[yellow]削除をキャンセルしました[/yellow]")
+                return
+
+        # 削除実行
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("削除中...", total=None)
+            success = vector_store.remove_image(image_id)
+            progress.update(task, description="完了", completed=True)
+
+        if success:
+            console.print(f"\n[green]✓[/green] 画像 '{image['file_name']}' を削除しました")
+        else:
+            console.print(f"\n[yellow]警告:[/yellow] 画像の削除に失敗しました")
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+@click.command('clear-images')
+@click.option(
+    '--yes',
+    '-y',
+    is_flag=True,
+    help='確認をスキップ',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def clear_images_command(yes: bool, verbose: bool):
+    """ベクトルストア内のすべての画像を削除
+
+    警告: この操作は取り消せません。すべての画像が削除されます。
+
+    Args:
+        yes: 確認をスキップするか
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        # 設定の読み込み
+        config = get_config()
+
+        # ベクトルストアの初期化
+        vector_store = VectorStore(config)
+        vector_store.initialize()
+
+        # 画像一覧の取得
+        images = vector_store.list_images()
+
+        if not images:
+            console.print("[yellow]ベクトルストアに画像がありません[/yellow]")
+            return
+
+        image_count = len(images)
+
+        # 画像情報の表示
+        if verbose:
+            console.print(f"\n削除される画像数: {image_count}")
+
+        # 削除確認
+        if not yes:
+            console.print(
+                f"\n[red bold]警告:[/red bold] "
+                f"すべての画像（{image_count}個）を削除します"
+            )
+            console.print("[yellow]この操作は取り消せません[/yellow]")
+
+            confirmation = click.prompt(
+                "\n続行するには 'DELETE' と入力してください",
+                type=str,
+                default="",
+            )
+
+            if confirmation != "DELETE":
+                console.print("[yellow]削除をキャンセルしました[/yellow]")
+                return
+
+        # 削除実行
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("すべての画像を削除中...", total=None)
+
+            # すべての画像を個別に削除
+            deleted_count = 0
+            for image in images:
+                if vector_store.remove_image(image['id']):
+                    deleted_count += 1
+
+            progress.update(task, description="完了", completed=True)
+
+        # 成功メッセージ
+        console.print(f"\n[green]✓[/green] すべての画像を削除しました")
+        console.print(f"  削除された画像数: {deleted_count}")
 
     except VectorStoreError as e:
         console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")

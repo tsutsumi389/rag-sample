@@ -13,7 +13,16 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from .commands.config import config_command, init_command, status_command
-from .commands.document import add_command, clear_command, list_command, remove_command
+from .commands.document import (
+    add_command,
+    add_image_command,
+    clear_command,
+    clear_images_command,
+    list_command,
+    list_images_command,
+    remove_command,
+    remove_image_command,
+)
 from .commands.query import chat, query, search
 from .utils.config import ConfigError, get_config
 
@@ -74,12 +83,13 @@ def setup_logging(verbose: bool = False):
 def cli(ctx: click.Context, verbose: bool, version: bool):
     """RAG (Retrieval-Augmented Generation) CLI Application
 
-    ローカルドキュメントをベクトルデータベースに保存し、
+    ローカルドキュメントと画像をベクトルデータベースに保存し、
     自然言語での質問に対して関連情報を検索・回答を生成します。
 
     \b
     主要機能:
       • ドキュメント管理 (add, remove, list, clear)
+      • 画像管理 (add-image, remove-image, list-images, clear-images)
       • 質問応答 (query)
       • ドキュメント検索 (search)
       • 対話モード (chat)
@@ -87,11 +97,12 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
 
     \b
     使用例:
-      $ rag init                    # システムの初期化
-      $ rag add sample.txt          # ドキュメントの追加
-      $ rag query "RAGとは何ですか？"  # 質問応答
-      $ rag search "機械学習"        # ドキュメント検索
-      $ rag chat                    # 対話モード開始
+      $ rag init                      # システムの初期化
+      $ rag add sample.txt            # ドキュメントの追加
+      $ rag add-image ./images        # 画像の追加
+      $ rag query "RAGとは何ですか？"    # 質問応答
+      $ rag search "機械学習"          # ドキュメント検索
+      $ rag chat                      # 対話モード開始
 
     詳細は各コマンドのヘルプを参照してください:
       $ rag <command> --help
@@ -119,6 +130,12 @@ cli.add_command(add_command, name="add")
 cli.add_command(remove_command, name="remove")
 cli.add_command(list_command, name="list")
 cli.add_command(clear_command, name="clear")
+
+# 画像管理コマンドの登録
+cli.add_command(add_image_command, name="add-image")
+cli.add_command(list_images_command, name="list-images")
+cli.add_command(remove_image_command, name="remove-image")
+cli.add_command(clear_images_command, name="clear-images")
 
 # 検索・質問コマンドの登録
 cli.add_command(query, name="query")
