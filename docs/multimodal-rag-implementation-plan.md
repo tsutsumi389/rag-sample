@@ -349,28 +349,28 @@ MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5   # 画像検索の重み
 #### タスク
 
 1. **マルチモーダルエンジン実装**
-   - [ ] `src/rag/multimodal_engine.py` 作成
-   - [ ] Gemma3 (マルチモーダルLLM) との統合
-   - [ ] テキストと画像の両方を含むコンテキスト構築
-   - [ ] 画像を含むプロンプト生成
+   - [x] `src/rag/multimodal_engine.py` 作成
+   - [x] Gemma3 (マルチモーダルLLM) との統合
+   - [x] テキストと画像の両方を含むコンテキスト構築
+   - [x] 画像を含むプロンプト生成
 
 2. **マルチモーダル検索**
-   - [ ] `search_multimodal()` メソッド実装
-   - [ ] テキストと画像の検索結果をマージ
-   - [ ] 重み付けスコアリング
+   - [x] `search_multimodal()` メソッド実装
+   - [x] テキストと画像の検索結果をマージ
+   - [x] 重み付けスコアリング
 
 3. **質問応答機能**
-   - [ ] `query_with_images()` メソッド実装
-   - [ ] 画像を含む質問への回答生成
-   - [ ] 会話履歴のサポート（画像付き）
+   - [x] `query_with_images()` メソッド実装
+   - [x] 画像を含む質問への回答生成
+   - [x] 会話履歴のサポート（画像付き）
 
 4. **コマンド実装**
    - [ ] `query-multimodal` コマンド実装
    - [ ] `chat-multimodal` コマンド実装
 
 5. **統合テスト**
-   - [ ] `tests/integration/test_multimodal_rag.py`
-   - [ ] 画像を含む質問応答のエンドツーエンドテスト
+   - [x] `tests/integration/test_multimodal_rag.py`
+   - [x] 画像を含む質問応答のエンドツーエンドテスト
 
 **完了基準**:
 - テキストと画像を組み合わせた質問ができる
