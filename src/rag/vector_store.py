@@ -5,6 +5,7 @@
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,7 +13,7 @@ import chromadb
 from chromadb.api.models.Collection import Collection
 from chromadb.config import Settings
 
-from ..models.document import Chunk, SearchResult
+from ..models.document import Chunk, SearchResult, ImageDocument
 from ..utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -431,6 +432,473 @@ class VectorStore:
             error_msg = f"コレクション情報の取得に失敗しました: {str(e)}"
             logger.error(error_msg)
             raise VectorStoreError(error_msg) from e
+
+    # ==================== 画像関連メソッド ====================
+
+    def add_images(
+        self,
+        images: list[ImageDocument],
+        embeddings: list[list[float]],
+        collection_name: str = "images"
+    ) -> list[str]:
+        """画像ドキュメントを画像コレクションに追加
+
+        Args:
+            images: 追加するImageDocumentオブジェクトのリスト
+            embeddings: 各画像の埋め込みベクトルのリスト
+            collection_name: 画像コレクション名（デフォルト: "images"）
+
+        Returns:
+            追加された画像のIDリスト
+
+        Raises:
+            VectorStoreError: 追加に失敗した場合
+        """
+        if not self.client:
+            raise VectorStoreError("クライアントが初期化されていません")
+
+        if len(images) != len(embeddings):
+            raise VectorStoreError(
+                f"画像数({len(images)})と埋め込み数({len(embeddings)})が一致しません"
+            )
+
+        if not images:
+            logger.warning("追加する画像がありません")
+            return []
+
+        try:
+            # 画像コレクションの取得または作成
+            image_collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Multimodal RAG image store"}
+            )
+
+            # ChromaDB用のデータを準備
+            ids = [img.id for img in images]
+            documents = [img.caption for img in images]  # キャプションをドキュメントとして保存
+            metadatas = []
+
+            for img in images:
+                metadata = {
+                    'id': img.id,
+                    'file_path': str(img.file_path),
+                    'file_name': img.file_name,
+                    'image_type': img.image_type,
+                    'caption': img.caption,
+                    'created_at': img.created_at.isoformat(),
+                    'source': 'local',
+                }
+                # 追加のメタデータをマージ
+                if img.metadata:
+                    metadata.update({
+                        f"custom_{k}": v for k, v in img.metadata.items()
+                        if k not in metadata
+                    })
+                metadatas.append(metadata)
+
+            logger.info(f"{len(images)}個の画像を{collection_name}コレクションに追加中...")
+
+            # バッチでChromaDBに追加
+            image_collection.add(
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas
+            )
+
+            logger.info(
+                f"{len(images)}個の画像を正常に追加しました "
+                f"(総画像数: {image_collection.count()})"
+            )
+
+            return ids
+
+        except Exception as e:
+            error_msg = f"画像の追加に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    def search_images(
+        self,
+        query_embedding: list[float],
+        top_k: int = 5,
+        collection_name: str = "images",
+        where: Optional[dict[str, Any]] = None
+    ) -> list[SearchResult]:
+        """埋め込みベクトルを使用して類似画像を検索
+
+        Args:
+            query_embedding: クエリの埋め込みベクトル
+            top_k: 返す結果の最大数
+            collection_name: 検索する画像コレクション名（デフォルト: "images"）
+            where: メタデータフィルタ（例: {"image_type": "jpg"}）
+
+        Returns:
+            SearchResultオブジェクトのリスト（類似度の高い順）
+
+        Raises:
+            VectorStoreError: 検索に失敗した場合
+        """
+        if not self.client:
+            raise VectorStoreError("クライアントが初期化されていません")
+
+        try:
+            # 画像コレクションの取得
+            image_collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Multimodal RAG image store"}
+            )
+
+            logger.debug(f"画像検索を実行中（結果数: {top_k}）...")
+
+            # ChromaDBで検索
+            results = image_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+                where=where,
+                include=["documents", "metadatas", "distances"]
+            )
+
+            # 結果が空の場合
+            if not results['ids'][0]:
+                logger.info("画像検索結果が見つかりませんでした")
+                return []
+
+            # SearchResultオブジェクトに変換
+            search_results = []
+            for rank, (img_id, caption, metadata, distance) in enumerate(
+                zip(
+                    results['ids'][0],
+                    results['documents'][0],
+                    results['metadatas'][0],
+                    results['distances'][0]
+                ),
+                start=1
+            ):
+                # ダミーのChunkオブジェクトを作成（画像用）
+                chunk = Chunk(
+                    content=caption,
+                    chunk_id=img_id,
+                    document_id=img_id,
+                    chunk_index=0,
+                    start_char=0,
+                    end_char=len(caption),
+                    metadata=metadata
+                )
+
+                # 距離をスコアに変換
+                score = 1.0 / (1.0 + distance)
+
+                # 画像パスの取得
+                image_path = Path(metadata.get('file_path', ''))
+
+                search_result = SearchResult(
+                    chunk=chunk,
+                    score=score,
+                    document_name=metadata.get('file_name', 'Unknown'),
+                    document_source=metadata.get('file_path', 'Unknown'),
+                    rank=rank,
+                    metadata=metadata,
+                    result_type='image',
+                    image_path=image_path,
+                    caption=caption
+                )
+                search_results.append(search_result)
+
+            logger.info(f"{len(search_results)}件の画像検索結果を取得しました")
+            return search_results
+
+        except Exception as e:
+            error_msg = f"画像検索に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    def get_image_by_id(
+        self,
+        image_id: str,
+        collection_name: str = "images"
+    ) -> Optional[ImageDocument]:
+        """IDで画像ドキュメントを取得
+
+        Args:
+            image_id: 取得する画像のID
+            collection_name: 画像コレクション名（デフォルト: "images"）
+
+        Returns:
+            ImageDocumentオブジェクト、見つからない場合はNone
+
+        Raises:
+            VectorStoreError: 取得に失敗した場合
+        """
+        if not self.client:
+            raise VectorStoreError("クライアントが初期化されていません")
+
+        try:
+            # 画像コレクションの取得
+            image_collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Multimodal RAG image store"}
+            )
+
+            logger.debug(f"画像ID '{image_id}' を取得中...")
+
+            # IDで検索
+            results = image_collection.get(
+                ids=[image_id],
+                include=["documents", "metadatas"]
+            )
+
+            # 結果が空の場合
+            if not results['ids']:
+                logger.info(f"画像ID '{image_id}' が見つかりませんでした")
+                return None
+
+            # ImageDocumentオブジェクトに変換
+            metadata = results['metadatas'][0]
+            caption = results['documents'][0]
+
+            # カスタムメタデータの抽出
+            custom_metadata = {
+                k.replace('custom_', ''): v
+                for k, v in metadata.items()
+                if k.startswith('custom_')
+            }
+
+            image_doc = ImageDocument(
+                id=metadata['id'],
+                file_path=Path(metadata['file_path']),
+                file_name=metadata['file_name'],
+                image_type=metadata['image_type'],
+                caption=caption,
+                metadata=custom_metadata,
+                created_at=datetime.fromisoformat(metadata['created_at']),
+                image_data=None
+            )
+
+            logger.debug(f"画像 '{image_doc.file_name}' を取得しました")
+            return image_doc
+
+        except Exception as e:
+            error_msg = f"画像の取得に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    def remove_image(
+        self,
+        image_id: str,
+        collection_name: str = "images"
+    ) -> bool:
+        """画像をIDで削除
+
+        Args:
+            image_id: 削除する画像のID
+            collection_name: 画像コレクション名（デフォルト: "images"）
+
+        Returns:
+            削除に成功した場合True、画像が見つからない場合False
+
+        Raises:
+            VectorStoreError: 削除に失敗した場合
+        """
+        if not self.client:
+            raise VectorStoreError("クライアントが初期化されていません")
+
+        try:
+            # 画像コレクションの取得
+            image_collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Multimodal RAG image store"}
+            )
+
+            # 画像の存在確認
+            results = image_collection.get(ids=[image_id])
+            if not results['ids']:
+                logger.warning(f"画像ID '{image_id}' が見つかりませんでした")
+                return False
+
+            logger.info(f"画像ID '{image_id}' を削除中...")
+            initial_count = image_collection.count()
+
+            # 削除実行
+            image_collection.delete(ids=[image_id])
+
+            final_count = image_collection.count()
+            logger.info(
+                f"画像を削除しました (残り画像数: {final_count})"
+            )
+
+            return True
+
+        except Exception as e:
+            error_msg = f"画像の削除に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    def list_images(
+        self,
+        collection_name: str = "images",
+        limit: Optional[int] = None
+    ) -> list[ImageDocument]:
+        """画像コレクション内の全画像を取得
+
+        Args:
+            collection_name: 画像コレクション名（デフォルト: "images"）
+            limit: 返す画像数の上限（Noneの場合は全件）
+
+        Returns:
+            ImageDocumentオブジェクトのリスト
+
+        Raises:
+            VectorStoreError: 取得に失敗した場合
+        """
+        if not self.client:
+            raise VectorStoreError("クライアントが初期化されていません")
+
+        try:
+            # 画像コレクションの取得
+            image_collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Multimodal RAG image store"}
+            )
+
+            count = image_collection.count()
+
+            if count == 0:
+                logger.info("画像コレクションに画像がありません")
+                return []
+
+            logger.debug(f"画像コレクションから画像を取得中...")
+
+            # すべての画像データを取得
+            results = image_collection.get(
+                limit=limit,
+                include=["metadatas", "documents"]
+            )
+
+            # ImageDocumentオブジェクトのリストに変換
+            images = []
+            for img_id, caption, metadata in zip(
+                results['ids'],
+                results['documents'],
+                results['metadatas']
+            ):
+                # カスタムメタデータの抽出
+                custom_metadata = {
+                    k.replace('custom_', ''): v
+                    for k, v in metadata.items()
+                    if k.startswith('custom_')
+                }
+
+                image_doc = ImageDocument(
+                    id=metadata['id'],
+                    file_path=Path(metadata['file_path']),
+                    file_name=metadata['file_name'],
+                    image_type=metadata['image_type'],
+                    caption=caption,
+                    metadata=custom_metadata,
+                    created_at=datetime.fromisoformat(metadata['created_at']),
+                    image_data=None
+                )
+                images.append(image_doc)
+
+            logger.info(f"{len(images)}個の画像を取得しました")
+            return images
+
+        except Exception as e:
+            error_msg = f"画像一覧の取得に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    def search_multimodal(
+        self,
+        query_embedding: list[float],
+        top_k: int = 5,
+        text_weight: Optional[float] = None,
+        image_weight: Optional[float] = None
+    ) -> list[SearchResult]:
+        """テキストと画像を統合したマルチモーダル検索
+
+        テキストコレクションと画像コレクションの両方を検索し、
+        重み付けしてマージした結果を返します。
+
+        Args:
+            query_embedding: クエリの埋め込みベクトル
+            top_k: 返す結果の最大数
+            text_weight: テキスト検索結果の重み（Noneの場合は設定値を使用）
+            image_weight: 画像検索結果の重み（Noneの場合は設定値を使用）
+
+        Returns:
+            SearchResultオブジェクトのリスト（スコアの高い順）
+
+        Raises:
+            VectorStoreError: 検索に失敗した場合
+        """
+        try:
+            # 重みの設定（デフォルトは設定ファイルから）
+            if text_weight is None:
+                text_weight = self.config.multimodal_search_text_weight
+            if image_weight is None:
+                image_weight = self.config.multimodal_search_image_weight
+
+            logger.info(
+                f"マルチモーダル検索を実行中 "
+                f"(text_weight: {text_weight}, image_weight: {image_weight})"
+            )
+
+            # テキスト検索
+            text_results = []
+            try:
+                text_results = self.search(
+                    query_embedding=query_embedding,
+                    n_results=top_k
+                )
+            except Exception as e:
+                logger.warning(f"テキスト検索に失敗: {e}")
+
+            # 画像検索
+            image_results = []
+            try:
+                image_results = self.search_images(
+                    query_embedding=query_embedding,
+                    top_k=top_k
+                )
+            except Exception as e:
+                logger.warning(f"画像検索に失敗: {e}")
+
+            # スコアの重み付け
+            for result in text_results:
+                result.score *= text_weight
+                result.metadata['search_type'] = 'text'
+
+            for result in image_results:
+                result.score *= image_weight
+                result.metadata['search_type'] = 'image'
+
+            # 結果をマージしてスコアでソート
+            all_results = text_results + image_results
+            all_results.sort(key=lambda x: x.score, reverse=True)
+
+            # top_k件に制限
+            final_results = all_results[:top_k]
+
+            # ランクを再設定
+            for rank, result in enumerate(final_results, start=1):
+                result.rank = rank
+
+            logger.info(
+                f"マルチモーダル検索完了: "
+                f"テキスト{len(text_results)}件 + 画像{len(image_results)}件 "
+                f"→ 上位{len(final_results)}件"
+            )
+
+            return final_results
+
+        except Exception as e:
+            error_msg = f"マルチモーダル検索に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
+    # ==================== 既存メソッド ====================
 
     def close(self) -> None:
         """ChromaDBクライアントを閉じる
