@@ -10,7 +10,7 @@ import tempfile
 import shutil
 
 from src.utils.config import Config
-from src.models.document import Document, Chunk
+from src.models.document import Document, Chunk, ImageDocument
 
 
 @pytest.fixture
@@ -227,3 +227,104 @@ LLMは自然言語理解、文章生成、翻訳、要約など、様々なタ�
     files["llm"] = file3
 
     return files
+
+
+# ==================== マルチモーダルRAG用のfixture ====================
+
+@pytest.fixture
+def sample_image_files():
+    """テスト用の画像ファイルパス
+
+    Returns:
+        dict[str, Path]: 画像ファイル名とパスの辞書
+    """
+    base_path = Path("tests/fixtures/images")
+    return {
+        "sample1": base_path / "sample1.jpg",
+        "sample2": base_path / "sample2.png",
+        "sample3": base_path / "sample3.jpg",
+    }
+
+
+@pytest.fixture
+def sample_image_document(sample_image_files):
+    """テスト用ImageDocumentオブジェクト
+
+    Args:
+        sample_image_files: サンプル画像ファイルのパス辞書
+
+    Returns:
+        ImageDocument: サンプルのImageDocumentオブジェクト
+    """
+    from datetime import datetime
+
+    return ImageDocument(
+        id="test_img_001",
+        file_path=sample_image_files["sample1"],
+        file_name="sample1.jpg",
+        image_type="jpg",
+        caption="テスト画像1: 青い背景に白い円",
+        metadata={"source": "test", "tags": ["test", "blue"]},
+        created_at=datetime.now(),
+        image_data=None
+    )
+
+
+@pytest.fixture
+def mock_vision_embeddings(mocker):
+    """モック化されたビジョン埋め込み生成器
+
+    Args:
+        mocker: pytest-mockのmocker fixture
+
+    Returns:
+        Mock: VisionEmbeddingsのモック
+    """
+    mock = mocker.Mock()
+    # embed_image は単一のベクトルを返す
+    mock.embed_image.return_value = [0.1] * 512
+    # embed_images は複数のベクトルを返す
+    mock.embed_images.return_value = [[0.1] * 512, [0.2] * 512]
+    # generate_caption はキャプションを返す
+    mock.generate_caption.return_value = "テスト画像の説明"
+    # model_name属性
+    mock.model_name = "llava"
+    return mock
+
+
+@pytest.fixture
+def multimodal_config(tmp_path):
+    """マルチモーダルRAG用のテスト設定
+
+    Args:
+        tmp_path: pytestが提供する一時ディレクトリ
+
+    Returns:
+        Config: マルチモーダル対応のConfigオブジェクト
+    """
+    # 一時的なChromaDBディレクトリを作成
+    chroma_dir = tmp_path / "test_multimodal_chroma_db"
+    chroma_dir.mkdir(exist_ok=True)
+
+    # マルチモーダル設定を含む.envファイルを作成
+    env_file = tmp_path / "multimodal_test.env"
+    env_file.write_text(f"""
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_LLM_MODEL=gpt-oss
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+OLLAMA_MULTIMODAL_LLM_MODEL=gemma3
+OLLAMA_VISION_MODEL=llava
+CHROMA_PERSIST_DIRECTORY={chroma_dir}
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
+LOG_LEVEL=INFO
+IMAGE_CAPTION_AUTO_GENERATE=true
+MAX_IMAGE_SIZE_MB=10
+IMAGE_RESIZE_ENABLED=false
+IMAGE_RESIZE_MAX_WIDTH=1024
+IMAGE_RESIZE_MAX_HEIGHT=1024
+MULTIMODAL_SEARCH_TEXT_WEIGHT=0.5
+MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5
+""")
+
+    return Config(env_file=str(env_file))
