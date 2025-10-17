@@ -23,7 +23,7 @@ from .commands.document import (
     remove_command,
     remove_image_command,
 )
-from .commands.query import chat, query, search
+from .commands.query import chat, query, search, search_images
 from .utils.config import ConfigError, get_config
 
 # Richコンソールの初期化
@@ -140,6 +140,7 @@ cli.add_command(clear_images_command, name="clear-images")
 # 検索・質問コマンドの登録
 cli.add_command(query, name="query")
 cli.add_command(search, name="search")
+cli.add_command(search_images, name="search-images")
 cli.add_command(chat, name="chat")
 
 # 設定・管理コマンドの登録
