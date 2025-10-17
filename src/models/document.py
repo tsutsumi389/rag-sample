@@ -5,12 +5,22 @@
 - Chunk: メタデータを含む分割されたテキストチャンクを表現
 - SearchResult: 類似度スコアを含む検索結果を表現
 - ChatMessage: 会話履歴内のチャットメッセージを表現
+- ImageDocument: 画像ドキュメントを表現（マルチモーダルRAG用）
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+__all__ = [
+    'Document',
+    'Chunk',
+    'SearchResult',
+    'ChatMessage',
+    'ChatHistory',
+    'ImageDocument',
+]
 
 
 @dataclass
@@ -25,6 +35,8 @@ class Document:
         source: ソース識別子（通常はファイルパス文字列）
         timestamp: 作成/追加タイムスタンプ
         metadata: 追加のメタデータ辞書
+        document_type: ドキュメントのタイプ（'text' または 'image'）
+        image_path: 画像の場合のファイルパス（テキストの場合はNone）
     """
     file_path: Path
     name: str
@@ -33,6 +45,8 @@ class Document:
     source: str
     timestamp: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
+    document_type: str = 'text'  # 'text' または 'image'
+    image_path: Path | None = None
 
     @property
     def size(self) -> int:
@@ -40,9 +54,11 @@ class Document:
         return len(self.content)
 
     def __post_init__(self):
-        """file_pathがPathオブジェクトであることを保証する。"""
+        """file_pathとimage_pathがPathオブジェクトであることを保証する。"""
         if not isinstance(self.file_path, Path):
             self.file_path = Path(self.file_path)
+        if self.image_path and not isinstance(self.image_path, Path):
+            self.image_path = Path(self.image_path)
 
 
 @dataclass
@@ -94,6 +110,9 @@ class SearchResult:
         document_source: ドキュメントのソースパス/識別子
         rank: 検索結果内のランキング位置（1始まり）
         metadata: チャンクからの追加メタデータ
+        result_type: 検索結果のタイプ（'text' または 'image'）
+        image_path: 画像検索結果の場合のファイルパス
+        caption: 画像検索結果の場合の説明文
     """
     chunk: Chunk
     score: float
@@ -101,6 +120,9 @@ class SearchResult:
     document_source: str
     rank: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
+    result_type: str = 'text'  # 'text' または 'image'
+    image_path: Path | None = None
+    caption: str | None = None
 
     def __post_init__(self):
         """スコアが有効な範囲内であることを保証する。"""
@@ -188,3 +210,56 @@ class ChatHistory:
     def __len__(self) -> int:
         """履歴内のメッセージ数を返す。"""
         return len(self.messages)
+
+
+@dataclass
+class ImageDocument:
+    """画像ドキュメントを表現する（マルチモーダルRAG用）。
+
+    Attributes:
+        id: 画像の一意識別子
+        file_path: 画像ファイルへの絶対パス
+        file_name: 画像ファイル名
+        image_type: 画像フォーマット（例: 'jpg', 'png', 'gif', 'webp'）
+        caption: ビジョンモデルが生成した画像の説明文
+        metadata: 追加のメタデータ辞書（タグ、元画像サイズなど）
+        created_at: 作成/追加タイムスタンプ
+        image_data: Base64エンコードされた画像データ（オプション）
+    """
+    id: str
+    file_path: Path
+    file_name: str
+    image_type: str
+    caption: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.now)
+    image_data: str | None = None
+
+    def __post_init__(self):
+        """file_pathがPathオブジェクトであることを保証する。"""
+        if not isinstance(self.file_path, Path):
+            self.file_path = Path(self.file_path)
+
+    @property
+    def size_mb(self) -> float:
+        """画像ファイルのサイズをMB単位で返す。"""
+        if self.file_path.exists():
+            return self.file_path.stat().st_size / (1024 * 1024)
+        return 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """辞書形式に変換する（シリアライゼーション用）。
+
+        Returns:
+            画像ドキュメントの情報を含む辞書
+        """
+        return {
+            'id': self.id,
+            'file_path': str(self.file_path),
+            'file_name': self.file_name,
+            'image_type': self.image_type,
+            'caption': self.caption,
+            'metadata': self.metadata,
+            'created_at': self.created_at.isoformat(),
+            'image_data': self.image_data,
+        }
