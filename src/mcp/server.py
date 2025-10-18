@@ -1,0 +1,70 @@
+"""MCPサーバーのメインエントリーポイント。
+
+このモジュールは、RAG CLIアプリケーションのMCPサーバー実装を提供します。
+Claude DesktopなどのMCPクライアントから、RAG機能をツールとして利用できます。
+"""
+
+import asyncio
+import logging
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+from .tools import register_tools
+from .handlers import ToolHandler
+from ..utils.logger import setup_logger
+
+
+async def main():
+    """MCPサーバーを起動します。
+
+    stdio経由でMCPクライアントと通信し、
+    RAG機能をツールとして提供します。
+    """
+    # ロガー設定
+    logger = setup_logger("mcp_server")
+    logger.info("RAG MCP Serverを起動中...")
+
+    try:
+        # MCPサーバー初期化
+        server = Server("rag-mcp-server")
+        logger.info("MCPサーバーを初期化しました")
+
+        # ツールハンドラー初期化
+        tool_handler = ToolHandler()
+        logger.info("ツールハンドラーを初期化しました")
+
+        # ツールを登録
+        register_tools(server, tool_handler)
+        logger.info("ツールを登録しました")
+
+        # サーバー起動（stdio経由で通信）
+        logger.info("RAG MCP Server is ready - stdio通信を開始します")
+
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                server.create_initialization_options()
+            )
+
+    except Exception as e:
+        logger.error(f"MCPサーバーの起動に失敗しました: {e}", exc_info=True)
+        raise
+
+
+def run():
+    """同期的にMCPサーバーを起動します（CLIエントリーポイント用）。
+
+    pyproject.tomlのscriptsセクションから呼び出されます。
+    """
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nMCPサーバーを停止しました")
+    except Exception as e:
+        print(f"エラー: {e}")
+        raise
+
+
+if __name__ == "__main__":
+    run()
