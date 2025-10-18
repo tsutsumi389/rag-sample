@@ -504,7 +504,7 @@ def search_images(
                 "[yellow]検索結果が見つかりませんでした。[/yellow]"
             )
             console.print("\n[dim]ヒント:[/dim]")
-            console.print("  • 画像を追加してください: rag add-image <image_path>")
+            console.print("  • 画像を追加してください: rag add <image_path>")
             console.print("  • 異なる検索クエリを試してください")
             return
 

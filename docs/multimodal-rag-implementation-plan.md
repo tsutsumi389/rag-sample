@@ -195,10 +195,11 @@ class VectorStore:
 #### `src/commands/document.py` 拡張
 
 ```bash
-# 画像追加コマンド
-rag add-image <image_path_or_directory>
-  --caption <custom_caption>  # オプション: 手動でキャプション指定
-  --tags <tag1,tag2>          # オプション: タグ付け
+# ドキュメント/画像追加コマンド（拡張子から自動判定）
+rag add <file_path_or_directory>
+  --caption <custom_caption>  # オプション: 画像の場合、手動でキャプション指定
+  --tags <tag1,tag2>          # オプション: 画像の場合、タグ付け
+  --document-id <id>          # オプション: ドキュメントの場合、ID指定
 
 # 画像一覧コマンド
 rag list-images
@@ -321,7 +322,7 @@ MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5   # 画像検索の重み
 #### タスク
 
 1. **コマンド実装**
-   - [x] `add-image` コマンド実装
+   - [x] `add` コマンド拡張（画像対応、拡張子から自動判定）
    - [x] `list-images` コマンド実装
    - [x] `remove-image` コマンド実装
    - [x] `search-images` コマンド実装
@@ -336,7 +337,9 @@ MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5   # 画像検索の重み
    - [x] 画像追加 → 検索 → 取得のエンドツーエンドテスト
 
 **完了基準**:
-- `rag add-image ./images` で画像を追加できる
+- `rag add ./images` で画像を追加できる（拡張子から自動判定）
+- `rag add image.jpg --caption "説明" --tags "タグ1,タグ2"` で画像にメタデータを付与できる
+- `rag add ./mixed_dir` でテキストと画像が混在するディレクトリを処理できる
 - `rag search-images "犬の写真"` で関連画像を検索できる
 - 統合テストがすべてパスする
 

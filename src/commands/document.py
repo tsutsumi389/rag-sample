@@ -789,7 +789,7 @@ def list_images_command(limit: Optional[int], format: str, verbose: bool):
         if not images:
             console.print("[yellow]ベクトルストアに画像がありません[/yellow]")
             console.print("\n画像を追加するには:")
-            console.print("  $ rag add-image <image_path>")
+            console.print("  $ rag add <image_path>")
             return
 
         # JSON形式で出力
