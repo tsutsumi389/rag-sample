@@ -26,10 +26,19 @@ class Config:
     DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
     DEFAULT_OLLAMA_LLM_MODEL = "gpt-oss"
     DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
+    DEFAULT_OLLAMA_MULTIMODAL_LLM_MODEL = "gemma3"
+    DEFAULT_OLLAMA_VISION_MODEL = "llava"
     DEFAULT_CHROMA_PERSIST_DIRECTORY = "./chroma_db"
     DEFAULT_CHUNK_SIZE = 1000
     DEFAULT_CHUNK_OVERLAP = 200
     DEFAULT_LOG_LEVEL = "INFO"
+    DEFAULT_IMAGE_CAPTION_AUTO_GENERATE = True
+    DEFAULT_MAX_IMAGE_SIZE_MB = 10
+    DEFAULT_IMAGE_RESIZE_ENABLED = False
+    DEFAULT_IMAGE_RESIZE_MAX_WIDTH = 1024
+    DEFAULT_IMAGE_RESIZE_MAX_HEIGHT = 1024
+    DEFAULT_MULTIMODAL_SEARCH_TEXT_WEIGHT = 0.5
+    DEFAULT_MULTIMODAL_SEARCH_IMAGE_WEIGHT = 0.5
 
     # バリデーション用の定数
     VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -69,6 +78,14 @@ class Config:
             "OLLAMA_EMBEDDING_MODEL",
             self.DEFAULT_OLLAMA_EMBEDDING_MODEL
         )
+        self.ollama_multimodal_llm_model = os.getenv(
+            "OLLAMA_MULTIMODAL_LLM_MODEL",
+            self.DEFAULT_OLLAMA_MULTIMODAL_LLM_MODEL
+        )
+        self.ollama_vision_model = os.getenv(
+            "OLLAMA_VISION_MODEL",
+            self.DEFAULT_OLLAMA_VISION_MODEL
+        )
 
         # ChromaDB設定
         self.chroma_persist_directory = os.getenv(
@@ -93,6 +110,68 @@ class Config:
 
         # ログ設定
         self.log_level = os.getenv("LOG_LEVEL", self.DEFAULT_LOG_LEVEL).upper()
+
+        # 画像処理設定
+        self.image_caption_auto_generate = os.getenv(
+            "IMAGE_CAPTION_AUTO_GENERATE",
+            str(self.DEFAULT_IMAGE_CAPTION_AUTO_GENERATE)
+        ).lower() == "true"
+
+        try:
+            self.max_image_size_mb = float(os.getenv(
+                "MAX_IMAGE_SIZE_MB",
+                str(self.DEFAULT_MAX_IMAGE_SIZE_MB)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"MAX_IMAGE_SIZE_MB must be a number, got: {os.getenv('MAX_IMAGE_SIZE_MB')}"
+            )
+
+        self.image_resize_enabled = os.getenv(
+            "IMAGE_RESIZE_ENABLED",
+            str(self.DEFAULT_IMAGE_RESIZE_ENABLED)
+        ).lower() == "true"
+
+        try:
+            self.image_resize_max_width = int(os.getenv(
+                "IMAGE_RESIZE_MAX_WIDTH",
+                str(self.DEFAULT_IMAGE_RESIZE_MAX_WIDTH)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"IMAGE_RESIZE_MAX_WIDTH must be an integer, got: {os.getenv('IMAGE_RESIZE_MAX_WIDTH')}"
+            )
+
+        try:
+            self.image_resize_max_height = int(os.getenv(
+                "IMAGE_RESIZE_MAX_HEIGHT",
+                str(self.DEFAULT_IMAGE_RESIZE_MAX_HEIGHT)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"IMAGE_RESIZE_MAX_HEIGHT must be an integer, got: {os.getenv('IMAGE_RESIZE_MAX_HEIGHT')}"
+            )
+
+        # マルチモーダル検索設定
+        try:
+            self.multimodal_search_text_weight = float(os.getenv(
+                "MULTIMODAL_SEARCH_TEXT_WEIGHT",
+                str(self.DEFAULT_MULTIMODAL_SEARCH_TEXT_WEIGHT)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"MULTIMODAL_SEARCH_TEXT_WEIGHT must be a number, got: {os.getenv('MULTIMODAL_SEARCH_TEXT_WEIGHT')}"
+            )
+
+        try:
+            self.multimodal_search_image_weight = float(os.getenv(
+                "MULTIMODAL_SEARCH_IMAGE_WEIGHT",
+                str(self.DEFAULT_MULTIMODAL_SEARCH_IMAGE_WEIGHT)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"MULTIMODAL_SEARCH_IMAGE_WEIGHT must be a number, got: {os.getenv('MULTIMODAL_SEARCH_IMAGE_WEIGHT')}"
+            )
 
         # バリデーション実行
         self._validate()
@@ -144,6 +223,39 @@ class Config:
                 f"got: {self.log_level}"
             )
 
+        # 画像サイズバリデーション
+        if self.max_image_size_mb <= 0:
+            raise ConfigError(
+                f"MAX_IMAGE_SIZE_MB must be greater than 0, "
+                f"got: {self.max_image_size_mb}"
+            )
+
+        # 画像リサイズ設定バリデーション
+        if self.image_resize_max_width <= 0:
+            raise ConfigError(
+                f"IMAGE_RESIZE_MAX_WIDTH must be greater than 0, "
+                f"got: {self.image_resize_max_width}"
+            )
+
+        if self.image_resize_max_height <= 0:
+            raise ConfigError(
+                f"IMAGE_RESIZE_MAX_HEIGHT must be greater than 0, "
+                f"got: {self.image_resize_max_height}"
+            )
+
+        # マルチモーダル検索の重みバリデーション
+        if not (0.0 <= self.multimodal_search_text_weight <= 1.0):
+            raise ConfigError(
+                f"MULTIMODAL_SEARCH_TEXT_WEIGHT must be between 0.0 and 1.0, "
+                f"got: {self.multimodal_search_text_weight}"
+            )
+
+        if not (0.0 <= self.multimodal_search_image_weight <= 1.0):
+            raise ConfigError(
+                f"MULTIMODAL_SEARCH_IMAGE_WEIGHT must be between 0.0 and 1.0, "
+                f"got: {self.multimodal_search_image_weight}"
+            )
+
     def get_chroma_path(self) -> Path:
         """ChromaDBの永続化ディレクトリパスを取得
 
@@ -167,10 +279,19 @@ class Config:
             "ollama_base_url": self.ollama_base_url,
             "ollama_llm_model": self.ollama_llm_model,
             "ollama_embedding_model": self.ollama_embedding_model,
+            "ollama_multimodal_llm_model": self.ollama_multimodal_llm_model,
+            "ollama_vision_model": self.ollama_vision_model,
             "chroma_persist_directory": self.chroma_persist_directory,
             "chunk_size": self.chunk_size,
             "chunk_overlap": self.chunk_overlap,
             "log_level": self.log_level,
+            "image_caption_auto_generate": self.image_caption_auto_generate,
+            "max_image_size_mb": self.max_image_size_mb,
+            "image_resize_enabled": self.image_resize_enabled,
+            "image_resize_max_width": self.image_resize_max_width,
+            "image_resize_max_height": self.image_resize_max_height,
+            "multimodal_search_text_weight": self.multimodal_search_text_weight,
+            "multimodal_search_image_weight": self.multimodal_search_image_weight,
         }
 
     def __repr__(self) -> str:

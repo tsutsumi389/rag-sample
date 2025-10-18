@@ -15,6 +15,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..rag.engine import RAGEngine, RAGEngineError, create_rag_engine
+from ..rag.vector_store import VectorStore, VectorStoreError
+from ..rag.vision_embeddings import VisionEmbeddings, VisionEmbeddingError
 from ..utils.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -416,4 +418,419 @@ def chat(n_results: int, no_sources: bool) -> None:
             style="red"
         )
         logger.exception("予期しないエラー")
+        sys.exit(1)
+
+
+@click.command()
+@click.argument("query_text", type=str)
+@click.option(
+    "--top-k",
+    "-k",
+    type=int,
+    default=5,
+    help="検索する画像の最大数（デフォルト: 5）"
+)
+@click.option(
+    "--show-path",
+    is_flag=True,
+    help="画像のフルパスを表示"
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="詳細情報を表示"
+)
+def search_images(
+    query_text: str,
+    top_k: int,
+    show_path: bool,
+    verbose: bool
+) -> None:
+    """テキストクエリで画像を検索します
+
+    指定されたテキストクエリに類似した画像を検索し、
+    類似度スコアと共に表示します。
+
+    Args:
+        query_text: 検索クエリ文字列
+        top_k: 検索する画像の最大数
+        show_path: 画像のフルパスを表示するフラグ
+        verbose: 詳細情報を表示するフラグ
+
+    Example:
+        $ rag search-images "犬の写真"
+        $ rag search-images "sunset landscape" -k 10
+        $ rag search-images "人物" --show-path -v
+    """
+    try:
+        # 設定の読み込みとコンポーネントの初期化
+        with console.status("[bold green]初期化中..."):
+            config = get_config()
+            vector_store = VectorStore(config)
+            vector_store.initialize()
+            
+            vision_embeddings = VisionEmbeddings(config)
+
+        # クエリの表示
+        console.print(Panel(
+            f"[bold cyan]検索クエリ:[/bold cyan] {query_text}",
+            border_style="cyan"
+        ))
+
+        # クエリの埋め込み生成
+        with console.status(
+            "[bold green]クエリの埋め込みを生成中..."
+        ):
+            # テキストクエリから埋め込みを生成
+            # vision_embeddingsではテキストからの埋め込み生成をサポートしていないため、
+            # テキスト埋め込みを使用してキャプションベースの検索を行う
+            from ..rag.embeddings import EmbeddingGenerator
+            embedding_generator = EmbeddingGenerator(config)
+            query_embedding = embedding_generator.embed_query(query_text)
+
+        # 画像検索の実行
+        with console.status(
+            f"[bold green]'{query_text}'で画像を検索中（最大{top_k}件）..."
+        ):
+            search_results = vector_store.search_images(
+                query_embedding=query_embedding,
+                top_k=top_k
+            )
+
+        # 結果の表示
+        if not search_results:
+            console.print(
+                "[yellow]検索結果が見つかりませんでした。[/yellow]"
+            )
+            console.print("\n[dim]ヒント:[/dim]")
+            console.print("  • 画像を追加してください: rag add <image_path>")
+            console.print("  • 異なる検索クエリを試してください")
+            return
+
+        console.print(
+            f"\n[bold green]検索結果: {len(search_results)}件[/bold green]\n"
+        )
+
+        # 検索結果をテーブル表示
+        results_table = Table(show_header=True, header_style="bold magenta")
+        results_table.add_column("#", justify="right", style="cyan", width=4)
+        results_table.add_column("ファイル名", style="green")
+        results_table.add_column("タイプ", style="magenta", width=8)
+        results_table.add_column("類似度", justify="right", style="yellow", width=10)
+        results_table.add_column("キャプション", style="dim", max_width=50)
+
+        if show_path:
+            results_table.add_column("パス", style="blue", max_width=40)
+
+        for i, result in enumerate(search_results, 1):
+            # キャプションを短縮
+            caption = result['caption']
+            if len(caption) > 50:
+                caption = caption[:47] + "..."
+
+            row_data = [
+                str(i),
+                result['file_name'],
+                result['image_type'].upper(),
+                f"{result['score']:.4f}",
+                caption
+            ]
+
+            if show_path:
+                row_data.append(result['file_path'])
+
+            results_table.add_row(*row_data)
+
+        console.print(results_table)
+
+        # 詳細情報の表示
+        if verbose:
+            console.print("\n[bold]検索結果の詳細:[/bold]\n")
+
+            for i, result in enumerate(search_results, 1):
+                panel_content = (
+                    f"[bold cyan]ファイル:[/bold cyan] {result['file_name']}\n"
+                    f"[bold cyan]タイプ:[/bold cyan] {result['image_type'].upper()}\n"
+                    f"[bold cyan]パス:[/bold cyan] {result['file_path']}\n"
+                    f"[bold cyan]類似度:[/bold cyan] {result['score']:.4f}\n"
+                    f"[bold cyan]作成日時:[/bold cyan] {result['created_at']}\n\n"
+                    f"[bold cyan]キャプション:[/bold cyan]\n{result['caption']}"
+                )
+
+                # タグがあれば表示
+                if result.get('tags'):
+                    tags_str = ", ".join(result['tags'])
+                    panel_content += f"\n\n[bold cyan]タグ:[/bold cyan] {tags_str}"
+
+                console.print(Panel(
+                    panel_content,
+                    title=f"[bold green]{i}. {result['file_name']}",
+                    border_style="blue",
+                    padding=(1, 2)
+                ))
+
+        # 統計情報
+        if verbose:
+            console.print(f"\n[cyan]統計情報:[/cyan]")
+            console.print(f"  検索結果数: {len(search_results)}")
+            if search_results:
+                avg_score = sum(r['score'] for r in search_results) / len(search_results)
+                console.print(f"  平均類似度: {avg_score:.4f}")
+                console.print(f"  最高類似度: {search_results[0]['score']:.4f}")
+                console.print(f"  最低類似度: {search_results[-1]['score']:.4f}")
+
+        logger.info(f"画像検索が完了しました: '{query_text[:50]}' -> {len(search_results)}件")
+
+    except VisionEmbeddingError as e:
+        console.print(f"[bold red]エラー:[/bold red] {str(e)}", style="red")
+        console.print("\n[yellow]ヒント:[/yellow]")
+        console.print("  1. Ollamaが起動しているか確認してください")
+        console.print("  2. ビジョンモデルがインストールされているか確認してください")
+        console.print("     $ ollama pull llava")
+        logger.error(f"ビジョン埋め込みエラー: {str(e)}")
+        sys.exit(1)
+
+    except VectorStoreError as e:
+        console.print(f"[bold red]エラー:[/bold red] {str(e)}", style="red")
+        logger.error(f"ベクトルストアエラー: {str(e)}")
+        sys.exit(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]検索が中断されました[/yellow]")
+        sys.exit(0)
+
+    except Exception as e:
+        console.print(
+            f"[bold red]予期しないエラーが発生しました:[/bold red] {str(e)}",
+            style="red"
+        )
+        if verbose:
+            logger.exception("予期しないエラー")
+        sys.exit(1)
+
+
+@click.command()
+@click.argument("query_text", type=str)
+@click.option(
+    "--top-k",
+    "-k",
+    type=int,
+    default=10,
+    help="検索する結果の最大数（デフォルト: 10）"
+)
+@click.option(
+    "--text-weight",
+    type=float,
+    default=None,
+    help="テキスト検索結果の重み（0.0-1.0、デフォルト: 設定値）"
+)
+@click.option(
+    "--image-weight",
+    type=float,
+    default=None,
+    help="画像検索結果の重み（0.0-1.0、デフォルト: 設定値）"
+)
+@click.option(
+    "--show-content",
+    is_flag=True,
+    help="検索結果の内容を表示"
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="詳細情報を表示"
+)
+def search_multimodal(
+    query_text: str,
+    top_k: int,
+    text_weight: Optional[float],
+    image_weight: Optional[float],
+    show_content: bool,
+    verbose: bool
+) -> None:
+    """テキストと画像を統合したマルチモーダル検索
+
+    指定されたクエリでテキストコレクションと画像コレクションの両方を検索し、
+    重み付けしたスコアで統合した結果を表示します。
+
+    Args:
+        query_text: 検索クエリ文字列
+        top_k: 検索する結果の最大数
+        text_weight: テキスト検索結果の重み
+        image_weight: 画像検索結果の重み
+        show_content: 検索結果の内容を表示するフラグ
+        verbose: 詳細情報を表示するフラグ
+
+    Example:
+        $ rag search-multimodal "犬の写真"
+        $ rag search-multimodal "機械学習" -k 15
+        $ rag search-multimodal "Python" --text-weight 0.7 --image-weight 0.3
+        $ rag search-multimodal "AI" --show-content -v
+    """
+    try:
+        # 設定の読み込みとコンポーネントの初期化
+        with console.status("[bold green]初期化中..."):
+            config = get_config()
+            vector_store = VectorStore(config)
+            vector_store.initialize()
+
+            # 埋め込み生成器の初期化
+            from ..rag.embeddings import EmbeddingGenerator
+            embedding_generator = EmbeddingGenerator(config)
+
+        # クエリの表示
+        console.print(Panel(
+            f"[bold cyan]検索クエリ:[/bold cyan] {query_text}",
+            border_style="cyan"
+        ))
+
+        # 重みの表示
+        if verbose:
+            display_text_weight = text_weight if text_weight is not None else config.multimodal_search_text_weight
+            display_image_weight = image_weight if image_weight is not None else config.multimodal_search_image_weight
+            console.print(
+                f"[dim]検索重み: テキスト={display_text_weight:.2f}, "
+                f"画像={display_image_weight:.2f}[/dim]"
+            )
+
+        # クエリの埋め込み生成
+        with console.status(
+            "[bold green]クエリの埋め込みを生成中..."
+        ):
+            query_embedding = embedding_generator.embed_query(query_text)
+
+        # マルチモーダル検索の実行
+        with console.status(
+            f"[bold green]'{query_text}'でマルチモーダル検索中（最大{top_k}件）..."
+        ):
+            search_results = vector_store.search_multimodal(
+                query_embedding=query_embedding,
+                top_k=top_k,
+                text_weight=text_weight,
+                image_weight=image_weight
+            )
+
+        # 結果の表示
+        if not search_results:
+            console.print(
+                "[yellow]検索結果が見つかりませんでした。[/yellow]"
+            )
+            console.print("\n[dim]ヒント:[/dim]")
+            console.print("  • ドキュメントや画像を追加してください: rag add <path>")
+            console.print("  • 異なる検索クエリを試してください")
+            return
+
+        # 結果のタイプ別カウント
+        text_count = sum(1 for r in search_results if r.result_type == 'text')
+        image_count = sum(1 for r in search_results if r.result_type == 'image')
+
+        console.print(
+            f"\n[bold green]検索結果: {len(search_results)}件[/bold green] "
+            f"[dim](テキスト: {text_count}件, 画像: {image_count}件)[/dim]\n"
+        )
+
+        # 検索結果をテーブル表示
+        results_table = Table(show_header=True, header_style="bold magenta")
+        results_table.add_column("#", justify="right", style="cyan", width=4)
+        results_table.add_column("タイプ", style="yellow", width=8)
+        results_table.add_column("名前", style="green")
+        results_table.add_column("類似度", justify="right", style="yellow", width=10)
+
+        if show_content:
+            results_table.add_column("内容/キャプション", style="dim", max_width=50)
+
+        for i, result in enumerate(search_results, 1):
+            result_type_display = "📄 TEXT" if result.result_type == 'text' else "🖼️ IMAGE"
+
+            row_data = [
+                str(i),
+                result_type_display,
+                result.document_name,
+                f"{result.score:.4f}"
+            ]
+
+            if show_content:
+                if result.result_type == 'text':
+                    # テキストの場合は内容の抜粋
+                    content_preview = result.chunk.content[:100]
+                    if len(result.chunk.content) > 100:
+                        content_preview += "..."
+                elif result.result_type == 'image':
+                    # 画像の場合はキャプション
+                    content_preview = result.caption or "N/A"
+                    if len(content_preview) > 100:
+                        content_preview = content_preview[:97] + "..."
+                else:
+                    content_preview = "N/A"
+
+                row_data.append(content_preview)
+
+            results_table.add_row(*row_data)
+
+        console.print(results_table)
+
+        # 詳細情報を表示
+        if show_content:
+            console.print("\n[bold]検索結果の詳細:[/bold]\n")
+
+            for i, result in enumerate(search_results, 1):
+                if result.result_type == 'text':
+                    panel_content = (
+                        f"[bold cyan]タイプ:[/bold cyan] テキストドキュメント\n"
+                        f"[bold cyan]ソース:[/bold cyan] {result.document_source}\n"
+                        f"[bold cyan]類似度:[/bold cyan] {result.score:.4f}\n\n"
+                        f"{result.chunk.content}"
+                    )
+                elif result.result_type == 'image':
+                    panel_content = (
+                        f"[bold cyan]タイプ:[/bold cyan] 画像\n"
+                        f"[bold cyan]パス:[/bold cyan] {result.image_path}\n"
+                        f"[bold cyan]類似度:[/bold cyan] {result.score:.4f}\n\n"
+                        f"[bold cyan]キャプション:[/bold cyan]\n{result.caption or 'N/A'}"
+                    )
+                else:
+                    panel_content = f"[bold cyan]不明なタイプ:[/bold cyan] {result.result_type}"
+
+                console.print(Panel(
+                    panel_content,
+                    title=f"[bold green]{i}. {result.document_name}",
+                    border_style="blue",
+                    padding=(1, 2)
+                ))
+
+        # 統計情報
+        if verbose:
+            console.print(f"\n[cyan]統計情報:[/cyan]")
+            console.print(f"  検索結果数: {len(search_results)}")
+            console.print(f"  テキスト: {text_count}件")
+            console.print(f"  画像: {image_count}件")
+            if search_results:
+                avg_score = sum(r.score for r in search_results) / len(search_results)
+                console.print(f"  平均類似度: {avg_score:.4f}")
+                console.print(f"  最高類似度: {search_results[0].score:.4f}")
+                console.print(f"  最低類似度: {search_results[-1].score:.4f}")
+
+        logger.info(
+            f"マルチモーダル検索が完了しました: '{query_text[:50]}' -> "
+            f"{len(search_results)}件（テキスト: {text_count}, 画像: {image_count}）"
+        )
+
+    except VectorStoreError as e:
+        console.print(f"[bold red]エラー:[/bold red] {str(e)}", style="red")
+        logger.error(f"ベクトルストアエラー: {str(e)}")
+        sys.exit(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]検索が中断されました[/yellow]")
+        sys.exit(0)
+
+    except Exception as e:
+        console.print(
+            f"[bold red]予期しないエラーが発生しました:[/bold red] {str(e)}",
+            style="red"
+        )
+        if verbose:
+            logger.exception("予期しないエラー")
         sys.exit(1)
