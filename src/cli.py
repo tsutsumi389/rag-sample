@@ -20,7 +20,7 @@ from .commands.document import (
     list_command,
     remove_command,
 )
-from .commands.query import chat, query, search, search_images
+from .commands.query import chat, query, search, search_images, search_multimodal
 from .utils.config import ConfigError, get_config
 
 # Richコンソールの初期化
@@ -88,7 +88,7 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
       • ドキュメント/画像管理 (add, remove, list, clear)
       • 画像管理 (clear-images)
       • 質問応答 (query)
-      • ドキュメント/画像検索 (search, search-images)
+      • ドキュメント/画像検索 (search, search-images, search-multimodal)
       • 対話モード (chat)
       • システム管理 (init, status, config)
 
@@ -136,6 +136,7 @@ cli.add_command(clear_images_command, name="clear-images")
 cli.add_command(query, name="query")
 cli.add_command(search, name="search")
 cli.add_command(search_images, name="search-images")
+cli.add_command(search_multimodal, name="search-multimodal")
 cli.add_command(chat, name="chat")
 
 # 設定・管理コマンドの登録
