@@ -11,7 +11,6 @@ from mcp.server.stdio import stdio_server
 
 from .tools import register_tools
 from .handlers import ToolHandler
-from ..utils.logger import setup_logger
 
 
 async def main():
@@ -21,7 +20,11 @@ async def main():
     RAG機能をツールとして提供します。
     """
     # ロガー設定
-    logger = setup_logger("mcp_server")
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger("mcp_server")
     logger.info("RAG MCP Serverを起動中...")
 
     try:
