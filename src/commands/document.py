@@ -490,12 +490,12 @@ def add_image_command(image_path: str, caption: Optional[str], tags: Optional[st
             # 画像の読み込み
             if path.is_file():
                 progress.update(task, description=f"画像を読み込み中: {path.name}")
-                images = [image_processor.load_image(str(path), custom_caption=caption, tags=tag_list)]
+                images = [image_processor.load_image(str(path), caption=caption, tags=tag_list)]
             elif path.is_dir():
                 progress.update(task, description=f"ディレクトリから画像を読み込み中: {path.name}")
                 images = image_processor.load_images_from_directory(
                     str(path),
-                    custom_caption=caption,
+                    caption=caption,
                     tags=tag_list
                 )
                 if not images:
