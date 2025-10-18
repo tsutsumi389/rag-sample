@@ -19,7 +19,6 @@ from .commands.document import (
     clear_images_command,
     list_command,
     remove_command,
-    remove_image_command,
 )
 from .commands.query import chat, query, search, search_images
 from .utils.config import ConfigError, get_config
@@ -87,7 +86,7 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
     \b
     主要機能:
       • ドキュメント/画像管理 (add, remove, list, clear)
-      • 画像管理 (remove-image, clear-images)
+      • 画像管理 (clear-images)
       • 質問応答 (query)
       • ドキュメント/画像検索 (search, search-images)
       • 対話モード (chat)
@@ -131,7 +130,6 @@ cli.add_command(list_command, name="list")
 cli.add_command(clear_command, name="clear")
 
 # 画像専用管理コマンドの登録
-cli.add_command(remove_image_command, name="remove-image")
 cli.add_command(clear_images_command, name="clear-images")
 
 # 検索・質問コマンドの登録

@@ -458,7 +458,7 @@ def _add_images_from_directory(directory_path: str, caption: Optional[str], tags
 
 
 @click.command('remove')
-@click.argument('document_id', type=str)
+@click.argument('item_id', type=str)
 @click.option(
     '--yes',
     '-y',
@@ -471,13 +471,14 @@ def _add_images_from_directory(directory_path: str, caption: Optional[str], tags
     is_flag=True,
     help='詳細情報を表示',
 )
-def remove_command(document_id: str, yes: bool, verbose: bool):
-    """ドキュメントをベクトルストアから削除
+def remove_command(item_id: str, yes: bool, verbose: bool):
+    """ドキュメントまたは画像をベクトルストアから削除
 
-    指定されたドキュメントIDのドキュメントとそのすべてのチャンクを削除します。
+    指定されたIDのドキュメントまたは画像を自動判定して削除します。
+    IDからドキュメントと画像の両方を検索し、見つかった方を削除します。
 
     Args:
-        document_id: 削除するドキュメントのID
+        item_id: 削除するドキュメントIDまたは画像ID
         yes: 確認をスキップするか
         verbose: 詳細情報を表示するか
     """
@@ -489,51 +490,89 @@ def remove_command(document_id: str, yes: bool, verbose: bool):
         vector_store = VectorStore(config)
         vector_store.initialize()
 
-        # ドキュメントの存在確認
+        # まずドキュメントとして検索
         documents = vector_store.list_documents()
         target_doc = None
         for doc in documents:
-            if doc['document_id'] == document_id:
+            if doc['document_id'] == item_id:
                 target_doc = doc
                 break
 
-        if not target_doc:
+        # ドキュメントとして見つかった場合
+        if target_doc:
+            # 削除確認
+            if not yes:
+                console.print(f"\n削除するドキュメント:")
+                console.print(f"  名前: {target_doc['document_name']}")
+                console.print(f"  ソース: {target_doc['source']}")
+                console.print(f"  チャンク数: {target_doc['chunk_count']}")
+
+                if not click.confirm("\n本当に削除しますか?", default=False):
+                    console.print("[yellow]削除をキャンセルしました[/yellow]")
+                    return
+
+            # 削除実行
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("削除中...", total=None)
+                deleted_count = vector_store.delete(document_id=item_id)
+                progress.update(task, description="完了", completed=True)
+
+            # 成功メッセージ
             console.print(
-                f"[yellow]警告:[/yellow] ドキュメントID '{document_id}' が見つかりませんでした",
-                style="bold yellow"
+                f"\n[green]✓[/green] ドキュメント '{target_doc['document_name']}' を削除しました"
             )
-            if verbose:
-                console.print("\n利用可能なドキュメントID:")
-                for doc in documents:
-                    console.print(f"  - {doc['document_id']}")
-            raise click.Abort()
+            console.print(f"  削除されたチャンク数: {deleted_count}")
+            return
 
-        # 削除確認
-        if not yes:
-            console.print(f"\n削除するドキュメント:")
-            console.print(f"  名前: {target_doc['document_name']}")
-            console.print(f"  ソース: {target_doc['source']}")
-            console.print(f"  チャンク数: {target_doc['chunk_count']}")
+        # ドキュメントとして見つからなければ画像として検索
+        image = vector_store.get_image_by_id(item_id)
 
-            if not click.confirm("\n本当に削除しますか?", default=False):
-                console.print("[yellow]削除をキャンセルしました[/yellow]")
-                return
+        if image:
+            # 削除確認
+            if not yes:
+                console.print(f"\n削除する画像:")
+                console.print(f"  ファイル名: {image['file_name']}")
+                console.print(f"  パス: {image['file_path']}")
+                caption_preview = image['caption'][:50] + "..." if len(image['caption']) > 50 else image['caption']
+                console.print(f"  キャプション: {caption_preview}")
 
-        # 削除実行
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("削除中...", total=None)
-            deleted_count = vector_store.delete(document_id=document_id)
-            progress.update(task, description="完了", completed=True)
+                if not click.confirm("\n本当に削除しますか?", default=False):
+                    console.print("[yellow]削除をキャンセルしました[/yellow]")
+                    return
 
-        # 成功メッセージ
+            # 削除実行
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("削除中...", total=None)
+                success = vector_store.remove_image(item_id)
+                progress.update(task, description="完了", completed=True)
+
+            if success:
+                console.print(f"\n[green]✓[/green] 画像 '{image['file_name']}' を削除しました")
+            else:
+                console.print(f"\n[yellow]警告:[/yellow] 画像の削除に失敗しました")
+            return
+
+        # どちらにも見つからなかった場合
         console.print(
-            f"\n[green]✓[/green] ドキュメント '{target_doc['document_name']}' を削除しました"
+            f"[yellow]警告:[/yellow] ID '{item_id}' が見つかりませんでした",
+            style="bold yellow"
         )
-        console.print(f"  削除されたチャンク数: {deleted_count}")
+        console.print("\nドキュメントにも画像にも該当するIDが存在しません")
+        if verbose:
+            console.print("\n利用可能なドキュメントID:")
+            for doc in documents:
+                console.print(f"  - {doc['document_id']}")
+            console.print("\n利用可能な画像IDを確認するには:")
+            console.print("  $ rag list --type image -v")
+        raise click.Abort()
 
     except VectorStoreError as e:
         console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
@@ -897,92 +936,6 @@ def clear_command(yes: bool, verbose: bool):
 # =============================================================================
 # 画像管理コマンド
 # =============================================================================
-
-
-
-
-@click.command('remove-image')
-@click.argument('image_id', type=str)
-@click.option(
-    '--yes',
-    '-y',
-    is_flag=True,
-    help='確認をスキップ',
-)
-@click.option(
-    '--verbose',
-    '-v',
-    is_flag=True,
-    help='詳細情報を表示',
-)
-def remove_image_command(image_id: str, yes: bool, verbose: bool):
-    """画像をベクトルストアから削除
-
-    指定された画像IDの画像を削除します。
-
-    Args:
-        image_id: 削除する画像のID
-        yes: 確認をスキップするか
-        verbose: 詳細情報を表示するか
-    """
-    try:
-        # 設定の読み込み
-        config = get_config()
-
-        # ベクトルストアの初期化
-        vector_store = VectorStore(config)
-        vector_store.initialize()
-
-        # 画像の存在確認
-        image = vector_store.get_image_by_id(image_id)
-
-        if not image:
-            console.print(
-                f"[yellow]警告:[/yellow] 画像ID '{image_id}' が見つかりませんでした",
-                style="bold yellow"
-            )
-            if verbose:
-                console.print("\n利用可能な画像IDを確認するには:")
-                console.print("  $ rag list --type image -v")
-            raise click.Abort()
-
-        # 削除確認
-        if not yes:
-            console.print(f"\n削除する画像:")
-            console.print(f"  ファイル名: {image['file_name']}")
-            console.print(f"  パス: {image['file_path']}")
-            console.print(f"  キャプション: {image['caption'][:50]}...")
-
-            if not click.confirm("\n本当に削除しますか?", default=False):
-                console.print("[yellow]削除をキャンセルしました[/yellow]")
-                return
-
-        # 削除実行
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("削除中...", total=None)
-            success = vector_store.remove_image(image_id)
-            progress.update(task, description="完了", completed=True)
-
-        if success:
-            console.print(f"\n[green]✓[/green] 画像 '{image['file_name']}' を削除しました")
-        else:
-            console.print(f"\n[yellow]警告:[/yellow] 画像の削除に失敗しました")
-
-    except VectorStoreError as e:
-        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("ベクトルストアエラーの詳細")
-        raise click.Abort()
-
-    except Exception as e:
-        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("予期しないエラーの詳細")
-        raise click.Abort()
 
 
 @click.command('clear-images')
