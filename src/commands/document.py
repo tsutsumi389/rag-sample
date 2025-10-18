@@ -86,6 +86,7 @@ def add_command(file_path: str, document_id: Optional[str], caption: Optional[st
 
     - 画像ファイル（.jpg, .png, .gif等）: ビジョン埋め込みを生成
     - ドキュメントファイル（.txt, .md, .pdf等）: テキストチャンクに分割して埋め込みを生成
+    - ディレクトリ: 内部のファイルを分類して画像とドキュメントを別々に処理
 
     Args:
         file_path: 追加するファイルまたはディレクトリのパス
@@ -96,9 +97,9 @@ def add_command(file_path: str, document_id: Optional[str], caption: Optional[st
     """
     path = Path(file_path)
 
-    # ディレクトリの場合は画像処理として扱う
+    # ディレクトリの場合は内部のファイルを分類して処理
     if path.is_dir():
-        _add_images_from_directory(file_path, caption, tags, verbose)
+        _add_from_directory(file_path, document_id, caption, tags, verbose)
         return
 
     # ファイルの場合は拡張子で判定
@@ -282,6 +283,77 @@ def _add_image_file(image_path: str, caption: Optional[str], tags: Optional[str]
         if verbose:
             logger.exception("予期しないエラーの詳細")
         raise click.Abort()
+
+
+def _add_from_directory(directory_path: str, document_id: Optional[str], caption: Optional[str], tags: Optional[str], verbose: bool):
+    """ディレクトリから画像とドキュメントを一括追加
+
+    ディレクトリ内のファイルを走査し、拡張子から画像とドキュメントを分類して
+    それぞれ適切に処理します。
+
+    Args:
+        directory_path: ディレクトリのパス
+        document_id: ドキュメントID（ドキュメントファイルの場合、各ファイルで自動生成される）
+        caption: 画像のキャプション（画像ファイルの場合、各画像で自動生成される）
+        tags: カンマ区切りのタグ（画像ファイルの場合のみ）
+        verbose: 詳細情報を表示するか
+    """
+    path = Path(directory_path)
+
+    # ディレクトリ内のファイルを収集
+    all_files = []
+    for file_path in path.rglob('*'):
+        if file_path.is_file():
+            all_files.append(file_path)
+
+    if not all_files:
+        console.print(f"[yellow]警告:[/yellow] {path} にファイルが見つかりませんでした")
+        return
+
+    # 画像ファイルとドキュメントファイルに分類
+    image_files = [f for f in all_files if _is_image_file(str(f))]
+    document_files = [f for f in all_files if not _is_image_file(str(f))]
+
+    # 結果の表示
+    console.print(f"\n[cyan]ディレクトリ分析結果:[/cyan]")
+    console.print(f"  総ファイル数: {len(all_files)}")
+    console.print(f"  画像ファイル: {len(image_files)}個")
+    console.print(f"  ドキュメントファイル: {len(document_files)}個")
+
+    # 画像ファイルの処理
+    if image_files:
+        console.print(f"\n[bold cyan]画像ファイルを処理中...[/bold cyan]")
+        _add_images_from_directory(directory_path, caption, tags, verbose)
+
+    # ドキュメントファイルの処理
+    processed_docs = 0
+    skipped_docs = 0
+    if document_files:
+        console.print(f"\n[bold cyan]ドキュメントファイルを処理中...[/bold cyan]")
+        for doc_file in document_files:
+            try:
+                console.print(f"\n処理中: {doc_file.name}")
+                _add_document_file(str(doc_file), None, verbose)
+                processed_docs += 1
+            except (UnsupportedFileTypeError, DocumentProcessorError) as e:
+                console.print(f"  [yellow]スキップ:[/yellow] {e}")
+                skipped_docs += 1
+                continue
+            except Exception as e:
+                console.print(f"  [red]エラー:[/red] {e}")
+                skipped_docs += 1
+                if verbose:
+                    logger.exception(f"ファイル処理エラー: {doc_file}")
+                continue
+
+    # 完了メッセージ
+    console.print(f"\n[green]✓[/green] ディレクトリの処理が完了しました")
+    if image_files:
+        console.print(f"  画像: {len(image_files)}個を追加")
+    if document_files:
+        console.print(f"  ドキュメント: {processed_docs}個を追加")
+        if skipped_docs > 0:
+            console.print(f"  スキップ: {skipped_docs}個")
 
 
 def _add_images_from_directory(directory_path: str, caption: Optional[str], tags: Optional[str], verbose: bool):
