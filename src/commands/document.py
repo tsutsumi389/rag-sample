@@ -943,7 +943,7 @@ def remove_image_command(image_id: str, yes: bool, verbose: bool):
             )
             if verbose:
                 console.print("\n利用可能な画像IDを確認するには:")
-                console.print("  $ rag-cli list-images -v")
+                console.print("  $ rag list --type image -v")
             raise click.Abort()
 
         # 削除確認
