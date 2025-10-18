@@ -548,24 +548,8 @@ def remove_command(document_id: str, yes: bool, verbose: bool):
         raise click.Abort()
 
 
-@click.command('list')
-@click.option(
-    '--limit',
-    '-l',
-    type=int,
-    default=None,
-    help='表示するドキュメント数の上限',
-)
-@click.option(
-    '--verbose',
-    '-v',
-    is_flag=True,
-    help='詳細情報を表示',
-)
-def list_command(limit: Optional[int], verbose: bool):
-    """ベクトルストア内のドキュメント一覧を表示
-
-    登録されているすべてのドキュメントの情報を表形式で表示します。
+def _list_documents(limit: Optional[int], verbose: bool):
+    """テキストドキュメント一覧を表示
 
     Args:
         limit: 表示するドキュメント数の上限
@@ -585,7 +569,7 @@ def list_command(limit: Optional[int], verbose: bool):
         if not documents:
             console.print("[yellow]ベクトルストアにドキュメントがありません[/yellow]")
             console.print("\nドキュメントを追加するには:")
-            console.print("  $ rag-cli add <file_path>")
+            console.print("  $ rag add <file_path>")
             return
 
         # テーブルの作成
@@ -649,126 +633,8 @@ def list_command(limit: Optional[int], verbose: bool):
         raise click.Abort()
 
 
-@click.command('clear')
-@click.option(
-    '--yes',
-    '-y',
-    is_flag=True,
-    help='確認をスキップ',
-)
-@click.option(
-    '--verbose',
-    '-v',
-    is_flag=True,
-    help='詳細情報を表示',
-)
-def clear_command(yes: bool, verbose: bool):
-    """ベクトルストア内のすべてのドキュメントを削除
-
-    警告: この操作は取り消せません。すべてのドキュメントとチャンクが削除されます。
-
-    Args:
-        yes: 確認をスキップするか
-        verbose: 詳細情報を表示するか
-    """
-    try:
-        # 設定の読み込み
-        config = get_config()
-
-        # ベクトルストアの初期化
-        vector_store = VectorStore(config)
-        vector_store.initialize()
-
-        # ドキュメント数の取得
-        document_count = vector_store.get_document_count()
-
-        if document_count == 0:
-            console.print("[yellow]ベクトルストアは既に空です[/yellow]")
-            return
-
-        # ドキュメント情報の表示
-        if verbose:
-            documents = vector_store.list_documents()
-            console.print(f"\n削除されるドキュメント数: {len(documents)}")
-            console.print(f"削除されるチャンク数: {document_count}")
-
-        # 削除確認
-        if not yes:
-            console.print(
-                f"\n[red bold]警告:[/red bold] "
-                f"すべてのドキュメント（{document_count}チャンク）を削除します"
-            )
-            console.print("[yellow]この操作は取り消せません[/yellow]")
-
-            confirmation = click.prompt(
-                "\n続行するには 'DELETE' と入力してください",
-                type=str,
-                default="",
-            )
-
-            if confirmation != "DELETE":
-                console.print("[yellow]削除をキャンセルしました[/yellow]")
-                return
-
-        # 削除実行
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("すべてのドキュメントを削除中...", total=None)
-            vector_store.clear()
-            progress.update(task, description="完了", completed=True)
-
-        # 成功メッセージ
-        console.print(
-            f"\n[green]✓[/green] すべてのドキュメントを削除しました"
-        )
-        console.print(f"  削除されたチャンク数: {document_count}")
-
-    except VectorStoreError as e:
-        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("ベクトルストアエラーの詳細")
-        raise click.Abort()
-
-    except Exception as e:
-        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("予期しないエラーの詳細")
-        raise click.Abort()
-
-
-# =============================================================================
-# 画像管理コマンド
-# =============================================================================
-
-
-@click.command('list-images')
-@click.option(
-    '--limit',
-    '-l',
-    type=int,
-    default=None,
-    help='表示する画像数の上限',
-)
-@click.option(
-    '--format',
-    '-f',
-    type=click.Choice(['table', 'json']),
-    default='table',
-    help='出力フォーマット',
-)
-@click.option(
-    '--verbose',
-    '-v',
-    is_flag=True,
-    help='詳細情報を表示',
-)
-def list_images_command(limit: Optional[int], format: str, verbose: bool):
-    """ベクトルストア内の画像一覧を表示
-
-    登録されているすべての画像の情報を表形式またはJSON形式で表示します。
+def _list_images(limit: Optional[int], format: str, verbose: bool):
+    """画像一覧を表示
 
     Args:
         limit: 表示する画像数の上限
@@ -873,6 +739,166 @@ def list_images_command(limit: Optional[int], format: str, verbose: bool):
         if verbose:
             logger.exception("予期しないエラーの詳細")
         raise click.Abort()
+
+
+def _list_all(limit: Optional[int], verbose: bool):
+    """ドキュメントと画像の両方を表示
+
+    Args:
+        limit: 表示する項目数の上限（それぞれに適用）
+        verbose: 詳細情報を表示するか
+    """
+    console.print("[bold cyan]テキストドキュメント:[/bold cyan]")
+    _list_documents(limit, verbose)
+
+    console.print("\n[bold cyan]画像:[/bold cyan]")
+    _list_images(limit, 'table', verbose)
+
+
+@click.command('list')
+@click.option(
+    '--limit',
+    '-l',
+    type=int,
+    default=None,
+    help='表示する項目数の上限',
+)
+@click.option(
+    '--type',
+    '-t',
+    type=click.Choice(['all', 'text', 'image']),
+    default='all',
+    help='表示するタイプ（all: すべて, text: テキストのみ, image: 画像のみ）',
+)
+@click.option(
+    '--format',
+    '-f',
+    type=click.Choice(['table', 'json']),
+    default='table',
+    help='出力フォーマット（画像表示時のみ有効）',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def list_command(limit: Optional[int], type: str, format: str, verbose: bool):
+    """ベクトルストア内のドキュメントと画像の一覧を表示
+
+    登録されているドキュメントと画像の情報を表形式で表示します。
+    --type オプションでテキストのみ、画像のみに絞り込むことができます。
+
+    Args:
+        limit: 表示する項目数の上限
+        type: 表示するタイプ（all/text/image）
+        format: 出力フォーマット（table/json、画像表示時のみ有効）
+        verbose: 詳細情報を表示するか
+    """
+    # タイプに基づいて適切な関数を呼び出し
+    if type == 'image':
+        _list_images(limit, format, verbose)
+    elif type == 'text':
+        _list_documents(limit, verbose)
+    else:  # type == 'all'
+        _list_all(limit, verbose)
+
+
+@click.command('clear')
+@click.option(
+    '--yes',
+    '-y',
+    is_flag=True,
+    help='確認をスキップ',
+)
+@click.option(
+    '--verbose',
+    '-v',
+    is_flag=True,
+    help='詳細情報を表示',
+)
+def clear_command(yes: bool, verbose: bool):
+    """ベクトルストア内のすべてのドキュメントを削除
+
+    警告: この操作は取り消せません。すべてのドキュメントとチャンクが削除されます。
+
+    Args:
+        yes: 確認をスキップするか
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        # 設定の読み込み
+        config = get_config()
+
+        # ベクトルストアの初期化
+        vector_store = VectorStore(config)
+        vector_store.initialize()
+
+        # ドキュメント数の取得
+        document_count = vector_store.get_document_count()
+
+        if document_count == 0:
+            console.print("[yellow]ベクトルストアは既に空です[/yellow]")
+            return
+
+        # ドキュメント情報の表示
+        if verbose:
+            documents = vector_store.list_documents()
+            console.print(f"\n削除されるドキュメント数: {len(documents)}")
+            console.print(f"削除されるチャンク数: {document_count}")
+
+        # 削除確認
+        if not yes:
+            console.print(
+                f"\n[red bold]警告:[/red bold] "
+                f"すべてのドキュメント（{document_count}チャンク）を削除します"
+            )
+            console.print("[yellow]この操作は取り消せません[/yellow]")
+
+            confirmation = click.prompt(
+                "\n続行するには 'DELETE' と入力してください",
+                type=str,
+                default="",
+            )
+
+            if confirmation != "DELETE":
+                console.print("[yellow]削除をキャンセルしました[/yellow]")
+                return
+
+        # 削除実行
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("すべてのドキュメントを削除中...", total=None)
+            vector_store.clear()
+            progress.update(task, description="完了", completed=True)
+
+        # 成功メッセージ
+        console.print(
+            f"\n[green]✓[/green] すべてのドキュメントを削除しました"
+        )
+        console.print(f"  削除されたチャンク数: {document_count}")
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+# =============================================================================
+# 画像管理コマンド
+# =============================================================================
+
+
 
 
 @click.command('remove-image')
