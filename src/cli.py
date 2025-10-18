@@ -15,7 +15,6 @@ from rich.logging import RichHandler
 from .commands.config import config_command, init_command, status_command
 from .commands.document import (
     add_command,
-    add_image_command,
     clear_command,
     clear_images_command,
     list_command,
@@ -88,10 +87,10 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
 
     \b
     主要機能:
-      • ドキュメント管理 (add, remove, list, clear)
-      • 画像管理 (add-image, remove-image, list-images, clear-images)
+      • ドキュメント/画像管理 (add, remove, list, clear)
+      • 画像管理 (remove-image, list-images, clear-images)
       • 質問応答 (query)
-      • ドキュメント検索 (search)
+      • ドキュメント/画像検索 (search, search-images)
       • 対話モード (chat)
       • システム管理 (init, status, config)
 
@@ -99,7 +98,8 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
     使用例:
       $ rag init                      # システムの初期化
       $ rag add sample.txt            # ドキュメントの追加
-      $ rag add-image ./images        # 画像の追加
+      $ rag add image.jpg             # 画像の追加（拡張子から自動判定）
+      $ rag add ./images              # ディレクトリ内の画像を一括追加
       $ rag query "RAGとは何ですか？"    # 質問応答
       $ rag search "機械学習"          # ドキュメント検索
       $ rag chat                      # 対話モード開始
@@ -125,14 +125,13 @@ def cli(ctx: click.Context, verbose: bool, version: bool):
         console.print(ctx.get_help())
 
 
-# ドキュメント管理コマンドの登録
+# ドキュメント/画像管理コマンドの登録
 cli.add_command(add_command, name="add")
 cli.add_command(remove_command, name="remove")
 cli.add_command(list_command, name="list")
 cli.add_command(clear_command, name="clear")
 
-# 画像管理コマンドの登録
-cli.add_command(add_image_command, name="add-image")
+# 画像専用管理コマンドの登録
 cli.add_command(list_images_command, name="list-images")
 cli.add_command(remove_image_command, name="remove-image")
 cli.add_command(clear_images_command, name="clear-images")

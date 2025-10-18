@@ -33,6 +33,22 @@ class DocumentCommandError(Exception):
     pass
 
 
+# 画像ファイル拡張子の定義
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
+
+
+def _is_image_file(file_path: str) -> bool:
+    """ファイルが画像かどうかを拡張子から判定
+
+    Args:
+        file_path: チェックするファイルのパス
+
+    Returns:
+        画像ファイルの場合True
+    """
+    return Path(file_path).suffix.lower() in IMAGE_EXTENSIONS
+
+
 @click.command('add')
 @click.argument('file_path', type=click.Path(exists=True))
 @click.option(
@@ -43,16 +59,57 @@ class DocumentCommandError(Exception):
     help='ドキュメントIDを指定（省略時は自動生成）',
 )
 @click.option(
+    '--caption',
+    '-c',
+    type=str,
+    default=None,
+    help='画像のキャプション（画像ファイルの場合のみ、省略時は自動生成）',
+)
+@click.option(
+    '--tags',
+    '-t',
+    type=str,
+    default=None,
+    help='カンマ区切りのタグ（画像ファイルの場合のみ、例: tag1,tag2,tag3）',
+)
+@click.option(
     '--verbose',
     '-v',
     is_flag=True,
     help='詳細情報を表示',
 )
-def add_command(file_path: str, document_id: Optional[str], verbose: bool):
-    """ドキュメントをベクトルストアに追加
+def add_command(file_path: str, document_id: Optional[str], caption: Optional[str], tags: Optional[str], verbose: bool):
+    """ドキュメントまたは画像をベクトルストアに追加
 
-    ファイルを読み込み、テキストチャンクに分割し、
-    埋め込みを生成してベクトルストアに保存します。
+    ファイルの拡張子から自動的に画像かドキュメントかを判定し、
+    適切な処理を行います。
+
+    - 画像ファイル（.jpg, .png, .gif等）: ビジョン埋め込みを生成
+    - ドキュメントファイル（.txt, .md, .pdf等）: テキストチャンクに分割して埋め込みを生成
+
+    Args:
+        file_path: 追加するファイルまたはディレクトリのパス
+        document_id: ドキュメントID（省略時は自動生成）
+        caption: 画像のキャプション（画像ファイルの場合のみ）
+        tags: カンマ区切りのタグ（画像ファイルの場合のみ）
+        verbose: 詳細情報を表示するか
+    """
+    path = Path(file_path)
+
+    # ディレクトリの場合は画像処理として扱う
+    if path.is_dir():
+        _add_images_from_directory(file_path, caption, tags, verbose)
+        return
+
+    # ファイルの場合は拡張子で判定
+    if _is_image_file(file_path):
+        _add_image_file(file_path, caption, tags, verbose)
+    else:
+        _add_document_file(file_path, document_id, verbose)
+
+
+def _add_document_file(file_path: str, document_id: Optional[str], verbose: bool):
+    """テキストドキュメントファイルを追加
 
     Args:
         file_path: 追加するファイルのパス
@@ -127,6 +184,192 @@ def add_command(file_path: str, document_id: Optional[str], verbose: bool):
         console.print("     $ ollama pull nomic-embed-text")
         if verbose:
             logger.exception("埋め込み生成エラーの詳細")
+        raise click.Abort()
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+def _add_image_file(image_path: str, caption: Optional[str], tags: Optional[str], verbose: bool):
+    """画像ファイルを追加
+
+    Args:
+        image_path: 追加する画像ファイルのパス
+        caption: 画像のキャプション（省略時は自動生成）
+        tags: カンマ区切りのタグ
+        verbose: 詳細情報を表示するか
+    """
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # 設定の読み込み
+            config = get_config()
+
+            # コンポーネントの初期化
+            task = progress.add_task("初期化中...", total=None)
+            vector_store = VectorStore(config)
+            vector_store.initialize()
+
+            vision_embeddings = VisionEmbeddings(config)
+            image_processor = ImageProcessor(vision_embeddings, config)
+            progress.update(task, description="初期化完了")
+
+            # タグの処理
+            tag_list = [tag.strip() for tag in tags.split(',')] if tags else []
+
+            # 画像の読み込み
+            path = Path(image_path)
+            progress.update(task, description=f"画像を読み込み中: {path.name}")
+            image = image_processor.load_image(str(path), caption=caption, tags=tag_list)
+
+            if verbose:
+                console.print(f"\n[cyan]画像情報:[/cyan]")
+                console.print(f"  ファイル名: {image.file_name}")
+                console.print(f"  タイプ: {image.image_type.upper()}")
+                console.print(f"  キャプション: {image.caption[:50]}...")
+
+            # 埋め込みの生成
+            progress.update(task, description="画像の埋め込みを生成中...")
+            embeddings = vision_embeddings.embed_images([image.file_path])
+
+            # ベクトルストアに追加
+            progress.update(task, description="ベクトルストアに追加中...")
+            image_ids = vector_store.add_images([image], embeddings)
+
+            progress.update(task, description="完了", completed=True)
+
+        # 成功メッセージ
+        console.print(f"\n[green]✓[/green] 画像 '{image.file_name}' を正常に追加しました")
+        if verbose:
+            console.print(f"  画像ID: {image_ids[0]}")
+
+    except ImageProcessorError as e:
+        console.print(f"[red]✗ 画像処理エラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("画像処理エラーの詳細")
+        raise click.Abort()
+
+    except VisionEmbeddingError as e:
+        console.print(f"[red]✗ ビジョン埋め込みエラー:[/red] {e}", style="bold red")
+        console.print("\n[yellow]ヒント:[/yellow]")
+        console.print("  1. Ollamaが起動しているか確認してください")
+        console.print("  2. ビジョンモデルがインストールされているか確認してください")
+        console.print("     $ ollama pull llava")
+        if verbose:
+            logger.exception("ビジョン埋め込みエラーの詳細")
+        raise click.Abort()
+
+    except VectorStoreError as e:
+        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("ベクトルストアエラーの詳細")
+        raise click.Abort()
+
+    except Exception as e:
+        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("予期しないエラーの詳細")
+        raise click.Abort()
+
+
+def _add_images_from_directory(directory_path: str, caption: Optional[str], tags: Optional[str], verbose: bool):
+    """ディレクトリから画像を一括追加
+
+    Args:
+        directory_path: 画像ディレクトリのパス
+        caption: 画像のキャプション（ディレクトリ一括追加では使用されず、各画像で自動生成される）
+        tags: カンマ区切りのタグ
+        verbose: 詳細情報を表示するか
+
+    Note:
+        caption パラメータはインターフェース統一のため存在しますが、
+        ディレクトリからの一括追加では各画像のキャプションが自動生成されます。
+    """
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # 設定の読み込み
+            config = get_config()
+
+            # コンポーネントの初期化
+            task = progress.add_task("初期化中...", total=None)
+            vector_store = VectorStore(config)
+            vector_store.initialize()
+
+            vision_embeddings = VisionEmbeddings(config)
+            image_processor = ImageProcessor(vision_embeddings, config)
+            progress.update(task, description="初期化完了")
+
+            # タグの処理
+            tag_list = [tag.strip() for tag in tags.split(',')] if tags else []
+
+            # ディレクトリから画像を読み込み
+            path = Path(directory_path)
+            progress.update(task, description=f"ディレクトリから画像を読み込み中: {path.name}")
+            images = image_processor.load_images_from_directory(
+                str(path),
+                auto_caption=True,
+                tags=tag_list
+            )
+
+            if not images:
+                console.print(f"[yellow]警告:[/yellow] {path} に画像ファイルが見つかりませんでした")
+                return
+
+            if verbose:
+                console.print(f"\n[cyan]画像情報:[/cyan]")
+                console.print(f"  読み込み画像数: {len(images)}")
+                for img in images[:5]:  # 最初の5件のみ表示
+                    console.print(f"    - {img.file_name} ({img.image_type.upper()})")
+                if len(images) > 5:
+                    console.print(f"    ... 他 {len(images) - 5} 件")
+
+            # 埋め込みの生成
+            progress.update(task, description=f"{len(images)}個の画像の埋め込みを生成中...")
+            image_paths = [img.file_path for img in images]
+            embeddings = vision_embeddings.embed_images(image_paths)
+
+            # ベクトルストアに追加
+            progress.update(task, description="ベクトルストアに追加中...")
+            image_ids = vector_store.add_images(images, embeddings)
+
+            progress.update(task, description="完了", completed=True)
+
+        # 成功メッセージ
+        console.print(f"\n[green]✓[/green] {len(images)}個の画像を正常に追加しました")
+        if verbose and len(images) > 0:
+            console.print(f"  最初の画像ID: {image_ids[0]}")
+            console.print(f"  追加された画像数: {len(image_ids)}")
+
+    except ImageProcessorError as e:
+        console.print(f"[red]✗ 画像処理エラー:[/red] {e}", style="bold red")
+        if verbose:
+            logger.exception("画像処理エラーの詳細")
+        raise click.Abort()
+
+    except VisionEmbeddingError as e:
+        console.print(f"[red]✗ ビジョン埋め込みエラー:[/red] {e}", style="bold red")
+        console.print("\n[yellow]ヒント:[/yellow]")
+        console.print("  1. Ollamaが起動しているか確認してください")
+        console.print("  2. ビジョンモデルがインストールされているか確認してください")
+        console.print("     $ ollama pull llava")
+        if verbose:
+            logger.exception("ビジョン埋め込みエラーの詳細")
         raise click.Abort()
 
     except VectorStoreError as e:
@@ -427,136 +670,6 @@ def clear_command(yes: bool, verbose: bool):
 # =============================================================================
 # 画像管理コマンド
 # =============================================================================
-
-
-@click.command('add-image')
-@click.argument('image_path', type=click.Path(exists=True))
-@click.option(
-    '--caption',
-    '-c',
-    type=str,
-    default=None,
-    help='画像のキャプション（省略時は自動生成）',
-)
-@click.option(
-    '--tags',
-    '-t',
-    type=str,
-    default=None,
-    help='カンマ区切りのタグ（例: tag1,tag2,tag3）',
-)
-@click.option(
-    '--verbose',
-    '-v',
-    is_flag=True,
-    help='詳細情報を表示',
-)
-def add_image_command(image_path: str, caption: Optional[str], tags: Optional[str], verbose: bool):
-    """画像をベクトルストアに追加
-
-    画像ファイルまたはディレクトリを読み込み、
-    ビジョン埋め込みを生成してベクトルストアに保存します。
-
-    Args:
-        image_path: 追加する画像ファイルまたはディレクトリのパス
-        caption: 画像のキャプション（省略時は自動生成）
-        tags: カンマ区切りのタグ
-        verbose: 詳細情報を表示するか
-    """
-    try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            # 設定の読み込み
-            config = get_config()
-
-            # コンポーネントの初期化
-            task = progress.add_task("初期化中...", total=None)
-            vector_store = VectorStore(config)
-            vector_store.initialize()
-
-            vision_embeddings = VisionEmbeddings(config)
-            image_processor = ImageProcessor(vision_embeddings, config)
-            progress.update(task, description="初期化完了")
-
-            # パスの処理
-            path = Path(image_path)
-
-            # タグの処理
-            tag_list = [tag.strip() for tag in tags.split(',')] if tags else []
-
-            # 画像の読み込み
-            if path.is_file():
-                progress.update(task, description=f"画像を読み込み中: {path.name}")
-                images = [image_processor.load_image(str(path), caption=caption, tags=tag_list)]
-            elif path.is_dir():
-                progress.update(task, description=f"ディレクトリから画像を読み込み中: {path.name}")
-                images = image_processor.load_images_from_directory(
-                    str(path),
-                    auto_caption=True,
-                    tags=tag_list
-                )
-                if not images:
-                    console.print(f"[yellow]警告:[/yellow] {path} に画像ファイルが見つかりませんでした")
-                    return
-            else:
-                console.print(f"[red]✗ エラー:[/red] 無効なパス: {image_path}", style="bold red")
-                raise click.Abort()
-
-            if verbose:
-                console.print(f"\n[cyan]画像情報:[/cyan]")
-                console.print(f"  読み込み画像数: {len(images)}")
-                for img in images[:5]:  # 最初の5件のみ表示
-                    console.print(f"    - {img.file_name} ({img.image_type.upper()})")
-                if len(images) > 5:
-                    console.print(f"    ... 他 {len(images) - 5} 件")
-
-            # 埋め込みの生成
-            progress.update(task, description=f"{len(images)}個の画像の埋め込みを生成中...")
-            image_paths = [img.file_path for img in images]
-            embeddings = vision_embeddings.embed_images(image_paths)
-
-            # ベクトルストアに追加
-            progress.update(task, description="ベクトルストアに追加中...")
-            image_ids = vector_store.add_images(images, embeddings)
-
-            progress.update(task, description="完了", completed=True)
-
-        # 成功メッセージ
-        console.print(f"\n[green]✓[/green] {len(images)}個の画像を正常に追加しました")
-        if verbose and len(images) > 0:
-            console.print(f"  最初の画像ID: {image_ids[0]}")
-            console.print(f"  追加された画像数: {len(image_ids)}")
-
-    except ImageProcessorError as e:
-        console.print(f"[red]✗ 画像処理エラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("画像処理エラーの詳細")
-        raise click.Abort()
-
-    except VisionEmbeddingError as e:
-        console.print(f"[red]✗ ビジョン埋め込みエラー:[/red] {e}", style="bold red")
-        console.print("\n[yellow]ヒント:[/yellow]")
-        console.print("  1. Ollamaが起動しているか確認してください")
-        console.print("  2. ビジョンモデルがインストールされているか確認してください")
-        console.print("     $ ollama pull llava")
-        if verbose:
-            logger.exception("ビジョン埋め込みエラーの詳細")
-        raise click.Abort()
-
-    except VectorStoreError as e:
-        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("ベクトルストアエラーの詳細")
-        raise click.Abort()
-
-    except Exception as e:
-        console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("予期しないエラーの詳細")
-        raise click.Abort()
 
 
 @click.command('list-images')
