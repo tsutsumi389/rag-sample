@@ -534,12 +534,19 @@ class ResourceHandler:
         self.config = get_config()
         self.logger = logging.getLogger(__name__)
 
-        # VectorStoreの初期化
+        # VectorStoreの初期化（ドキュメント用）
         self.doc_vector_store = VectorStore(
             config=self.config,
             collection_name="documents"
         )
         self.doc_vector_store.initialize()
+
+        # VectorStoreの初期化（画像用）
+        self.img_vector_store = VectorStore(
+            config=self.config,
+            collection_name="images"
+        )
+        self.img_vector_store.initialize()
 
     async def handle_resource_read(self, uri: str) -> dict[str, Any]:
         """リソース読み取りを処理します。
@@ -563,22 +570,62 @@ class ResourceHandler:
     async def _get_documents_list(self) -> dict[str, Any]:
         """ドキュメント一覧取得の実装。
 
+        テキストドキュメントと画像の両方を取得します。
+
         Returns:
-            ドキュメント一覧
+            ドキュメント一覧（テキストと画像を含む）
         """
         try:
-            documents = self.doc_vector_store.list_documents()
-            return {
+            result = {
                 "success": True,
-                "documents": documents,
-                "count": len(documents)
+                "documents": [],
+                "images": [],
+                "total_count": 0,
+                "message": ""
             }
+
+            # テキストドキュメント取得
+            try:
+                text_docs = self.doc_vector_store.list_documents()
+                result["documents"] = text_docs
+                self.logger.info(f"テキストドキュメント: {len(text_docs)}件")
+            except VectorStoreError as e:
+                self.logger.warning(f"テキストドキュメント取得エラー: {e}")
+                result["documents"] = []
+
+            # 画像ドキュメント取得
+            try:
+                image_docs = self.img_vector_store.list_images()
+                # ImageDocumentオブジェクトを辞書形式に変換
+                result["images"] = [img.to_dict() for img in image_docs]
+                self.logger.info(f"画像ドキュメント: {len(image_docs)}件")
+            except VectorStoreError as e:
+                self.logger.warning(f"画像ドキュメント取得エラー: {e}")
+                result["images"] = []
+
+            # 合計数を計算
+            total = len(result["documents"]) + len(result["images"])
+            result["total_count"] = total
+
+            if total == 0:
+                result["message"] = "登録されているドキュメントはありません"
+            else:
+                result["message"] = (
+                    f"合計 {total}件のドキュメントを取得しました "
+                    f"（テキスト: {len(result['documents'])}件, 画像: {len(result['images'])}件）"
+                )
+
+            self.logger.info(result["message"])
+            return result
+
         except Exception as e:
             error_msg = f"ドキュメント一覧の取得に失敗しました: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
             return {
                 "success": False,
                 "documents": [],
-                "count": 0,
+                "images": [],
+                "total_count": 0,
+                "message": error_msg,
                 "error": str(e)
             }

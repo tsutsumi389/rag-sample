@@ -10,7 +10,8 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
 from .tools import register_tools
-from .handlers import ToolHandler
+from .resources import register_resources
+from .handlers import ToolHandler, ResourceHandler
 
 
 async def main():
@@ -36,9 +37,17 @@ async def main():
         tool_handler = ToolHandler()
         logger.info("ツールハンドラーを初期化しました")
 
+        # リソースハンドラー初期化
+        resource_handler = ResourceHandler()
+        logger.info("リソースハンドラーを初期化しました")
+
         # ツールを登録
         register_tools(server, tool_handler)
         logger.info("ツールを登録しました")
+
+        # リソースを登録
+        register_resources(server, resource_handler)
+        logger.info("リソースを登録しました")
 
         # サーバー起動（stdio経由で通信）
         logger.info("RAG MCP Server is ready - stdio通信を開始します")
