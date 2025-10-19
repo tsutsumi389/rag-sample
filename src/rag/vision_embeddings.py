@@ -85,7 +85,17 @@ class VisionEmbeddings:
             # ollamaライブラリの型は辞書のようにアクセスできないため、属性アクセスを使用
             # modelオブジェクトの`model`属性にモデル名が格納されている（例: "llava:latest"）
             model_list = models.get('models', []) if isinstance(models, dict) else models.models
-            model_names = [model.model.split(':')[0] for model in model_list]
+            model_names = []
+            for model in model_list:
+                if isinstance(model, dict):
+                    # Try 'name' first, fallback to 'model'
+                    name = model.get('name') or model.get('model')
+                    if name:
+                        model_names.append(name.split(':')[0])
+                else:
+                    # Assume object with .model attribute
+                    if hasattr(model, 'model'):
+                        model_names.append(model.model.split(':')[0])
             if self.model_name not in model_names:
                 raise VisionEmbeddingError(
                     f"Vision model '{self.model_name}' is not available. "
