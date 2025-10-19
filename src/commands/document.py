@@ -742,7 +742,7 @@ def _list_images(limit: Optional[int], format: str, verbose: bool):
                 # tagsは文字列化されたリストかもしれないので適切に処理
                 tags = img.metadata.get('tags', [])
                 if isinstance(tags, list):
-                    tags_str = ", ".join(tags)
+                    tags_str = ", ".join(str(tag) for tag in tags)
                 else:
                     tags_str = str(tags) if tags else ""
                 row.extend([
