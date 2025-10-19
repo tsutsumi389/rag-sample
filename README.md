@@ -544,6 +544,7 @@ MCPサーバーは以下のツールとリソースを提供します：
 | `add_document` | テキストまたは画像ドキュメントを追加 | `file_path` (必須)<br>`caption` (画像の場合)<br>`tags` (画像の場合) |
 | `list_documents` | 登録済みドキュメント一覧を取得 | `limit` (件数制限)<br>`include_images` (画像を含むか) |
 | `search` | キーワードでドキュメントを検索 | `query` (必須)<br>`top_k` (結果数) |
+| `search_images` | テキストクエリで類似画像を検索 | `query` (必須)<br>`top_k` (結果数) |
 | `remove_document` | ドキュメントまたは画像を削除 | `item_id` (必須)<br>`item_type` (document/image/auto) |
 
 **使用例（Claude Desktop上）:**
@@ -554,6 +555,9 @@ MCPサーバーは以下のツールとリソースを提供します：
 
 # ドキュメントを検索
 「機械学習」に関連するドキュメントを検索してください
+
+# 画像を検索
+「猫の写真」に類似する画像を検索してください
 
 # ドキュメントを削除
 doc_001を削除してください
