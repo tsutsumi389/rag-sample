@@ -112,6 +112,26 @@ def register_tools(server: Server, handler: ToolHandler):
                     "required": ["item_id"]
                 }
             ),
+            Tool(
+                name="search_images",
+                description="テキストクエリで画像を検索します。指定されたテキストクエリに意味的に類似した画像を検索し、類似度スコアと共に返します。画像の内容（キャプション）に基づいた検索を行います。",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "画像検索のためのテキストクエリ（例: '青い空と海'、'猫の写真'など）"
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "返す検索結果の最大数（デフォルト: 5）",
+                            "minimum": 1,
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                }
+            ),
         ]
 
     @server.call_tool()
