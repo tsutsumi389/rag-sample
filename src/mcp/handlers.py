@@ -250,7 +250,7 @@ class ToolHandler:
                 "file_name": image.file_name,
                 "image_type": image.image_type,
                 "caption": image.caption,
-                "tags": image.tags,
+                "tags": image.metadata.get('tags', []),
                 "message": success_msg
             }
 
@@ -317,8 +317,9 @@ class ToolHandler:
             # 画像ドキュメント取得
             if include_images:
                 try:
-                    image_docs = self.img_vector_store.list_documents(limit=limit)
-                    result["images"] = image_docs
+                    image_docs = self.img_vector_store.list_images(limit=limit)
+                    # ImageDocumentオブジェクトを辞書形式に変換
+                    result["images"] = [img.to_dict() for img in image_docs]
                     self.logger.info(f"画像ドキュメント: {len(image_docs)}件")
                 except VectorStoreError as e:
                     self.logger.warning(f"画像ドキュメント取得エラー: {e}")
