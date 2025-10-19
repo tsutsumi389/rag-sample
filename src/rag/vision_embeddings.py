@@ -91,12 +91,19 @@ class VisionEmbeddings:
                     # Try 'name' first, fallback to 'model'
                     name = model.get('name') or model.get('model')
                     if name:
+                        # タグ付きの完全な名前も、タグなしのベース名も保存
+                        model_names.append(name)
                         model_names.append(name.split(':')[0])
                 else:
                     # Assume object with .model attribute
                     if hasattr(model, 'model'):
+                        # タグ付きの完全な名前も、タグなしのベース名も保存
+                        model_names.append(model.model)
                         model_names.append(model.model.split(':')[0])
-            if self.model_name not in model_names:
+
+            # self.model_nameも同様にタグあり/なし両方でチェック
+            model_name_base = self.model_name.split(':')[0]
+            if self.model_name not in model_names and model_name_base not in model_names:
                 raise VisionEmbeddingError(
                     f"Vision model '{self.model_name}' is not available. "
                     f"Please run: ollama pull {self.model_name}"

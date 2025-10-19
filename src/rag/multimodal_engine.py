@@ -126,8 +126,18 @@ class MultimodalRAGEngine:
         """
         try:
             models = self.ollama_client.list()
-            model_names = [model['name'].split(':')[0] for model in models.get('models', [])]
-            if self.llm_model not in model_names:
+            model_list = models.get('models', [])
+            model_names = []
+            for model in model_list:
+                name = model.get('name') or model.get('model')
+                if name:
+                    # タグ付きの完全な名前も、タグなしのベース名も保存
+                    model_names.append(name)
+                    model_names.append(name.split(':')[0])
+
+            # self.llm_modelも同様にタグあり/なし両方でチェック
+            llm_model_base = self.llm_model.split(':')[0]
+            if self.llm_model not in model_names and llm_model_base not in model_names:
                 raise MultimodalRAGEngineError(
                     f"Multimodal LLM model '{self.llm_model}' is not available. "
                     f"Please run: ollama pull {self.llm_model}"
