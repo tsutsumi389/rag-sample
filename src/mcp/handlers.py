@@ -42,6 +42,10 @@ class ToolHandler:
         )
         self.img_vector_store.initialize()
 
+        # 埋め込み生成器の初期化（検索用）
+        from ..rag.embeddings import EmbeddingGenerator
+        self.embedding_generator = EmbeddingGenerator(self.config)
+
     async def handle_tool_call(self, name: str, arguments: dict) -> dict[str, Any]:
         """ツール呼び出しを処理します。
 
@@ -59,6 +63,8 @@ class ToolHandler:
 
         if name == "list_documents":
             return await self._list_documents(**arguments)
+        elif name == "search":
+            return await self._search(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -124,6 +130,69 @@ class ToolHandler:
                 "documents": [],
                 "images": [],
                 "total_count": 0,
+                "message": error_msg,
+                "error": str(e)
+            }
+
+    async def _search(
+        self,
+        query: str,
+        top_k: int = 5
+    ) -> dict[str, Any]:
+        """ドキュメント検索の実装。
+
+        Args:
+            query: 検索クエリ文字列
+            top_k: 返す検索結果の最大数（デフォルト: 5）
+
+        Returns:
+            検索結果とメタデータを含む辞書
+        """
+        try:
+            self.logger.info(f"検索クエリ: '{query}', top_k: {top_k}")
+
+            # クエリの埋め込みを生成
+            query_embedding = self.embedding_generator.embed_query(query)
+            self.logger.debug(f"埋め込みベクトル生成完了: 次元数={len(query_embedding)}")
+
+            # ベクトル検索を実行
+            search_results = self.doc_vector_store.search(
+                query_embedding=query_embedding,
+                n_results=top_k
+            )
+
+            # 結果をJSON形式に変換
+            results_list = []
+            for result in search_results:
+                result_dict = {
+                    "content": result.chunk.content,
+                    "score": result.score,
+                    "metadata": result.chunk.metadata,
+                    "document_name": result.chunk.metadata.get("document_name", "Unknown"),
+                    "document_id": result.chunk.metadata.get("document_id", "Unknown"),
+                    "chunk_index": result.chunk.metadata.get("chunk_index", 0)
+                }
+                results_list.append(result_dict)
+
+            success_msg = f"{len(results_list)}件の検索結果を取得しました（クエリ: '{query}'）"
+            self.logger.info(success_msg)
+
+            return {
+                "success": True,
+                "query": query,
+                "results": results_list,
+                "count": len(results_list),
+                "message": success_msg
+            }
+
+        except Exception as e:
+            error_msg = f"検索に失敗しました（クエリ: '{query}'）: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "query": query,
+                "results": [],
+                "count": 0,
                 "message": error_msg,
                 "error": str(e)
             }

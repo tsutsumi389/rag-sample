@@ -49,6 +49,26 @@ def register_tools(server: Server, handler: ToolHandler):
                     }
                 }
             ),
+            Tool(
+                name="search",
+                description="キーワードでドキュメントを検索します。指定されたクエリに類似したドキュメントチャンクを検索し、類似度スコアと共に返します。",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "検索クエリ文字列"
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "返す検索結果の最大数（デフォルト: 5）",
+                            "minimum": 1,
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                }
+            ),
         ]
 
     @server.call_tool()
