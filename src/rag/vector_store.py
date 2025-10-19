@@ -496,11 +496,8 @@ class VectorStore:
                             # ChromaDBがサポートする型のみ追加
                             if isinstance(v, (str, int, float, bool, type(None))):
                                 metadata[f"custom_{k}"] = v
-                            elif isinstance(v, (list, dict)):
-                                # リストや辞書は文字列に変換
-                                metadata[f"custom_{k}"] = str(v)
                             else:
-                                # その他の型も文字列に変換
+                                # ChromaDBがサポートしない型は文字列に変換
                                 metadata[f"custom_{k}"] = str(v)
                 metadatas.append(metadata)
 
