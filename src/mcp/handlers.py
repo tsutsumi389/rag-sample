@@ -3,7 +3,6 @@
 MCPツール・リソースの呼び出しを実際のRAGコアロジックに橋渡しします。
 """
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -93,6 +92,8 @@ class ToolHandler:
             return await self._list_documents(**arguments)
         elif name == "search":
             return await self._search(**arguments)
+        elif name == "search_images":
+            return await self._search_images(**arguments)
         elif name == "remove_document":
             return await self._remove_document(**arguments)
         else:
@@ -404,6 +405,88 @@ class ToolHandler:
 
         except Exception as e:
             error_msg = f"検索に失敗しました（クエリ: '{query}'）: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "query": query,
+                "results": [],
+                "count": 0,
+                "message": error_msg,
+                "error": str(e)
+            }
+
+    async def _search_images(
+        self,
+        query: str,
+        top_k: int = 5
+    ) -> dict[str, Any]:
+        """画像検索の実装。
+
+        テキストクエリを使用して、意味的に類似した画像を検索します。
+        画像のキャプション（説明文）に基づいて検索を行います。
+
+        Args:
+            query: 画像検索のためのテキストクエリ
+            top_k: 返す検索結果の最大数（デフォルト: 5）
+
+        Returns:
+            検索結果とメタデータを含む辞書
+        """
+        try:
+            self.logger.info(f"画像検索クエリ: '{query}', top_k: {top_k}")
+
+            # テキストクエリの埋め込みを生成
+            query_embedding = self.embedding_generator.embed_query(query)
+            self.logger.debug(f"クエリ埋め込みベクトル生成完了: 次元数={len(query_embedding)}")
+
+            # 画像ベクトルストアでベクトル検索を実行
+            search_results = self.img_vector_store.search_images(
+                query_embedding=query_embedding,
+                top_k=top_k
+            )
+
+            # 結果をJSON形式に変換
+            results_list = []
+            for result in search_results:
+                result_dict = {
+                    "image_id": result.chunk.chunk_id,
+                    "file_name": result.document_name,
+                    "file_path": str(result.image_path) if result.image_path else result.document_source,
+                    "caption": result.caption,
+                    "image_type": result.metadata.get('image_type', 'Unknown'),
+                    "score": result.score,
+                    "rank": result.rank,
+                    "tags": result.metadata.get('tags', []),
+                    "added_at": result.metadata.get('added_at', 'Unknown')
+                }
+                results_list.append(result_dict)
+
+            success_msg = f"{len(results_list)}件の画像検索結果を取得しました（クエリ: '{query}'）"
+            self.logger.info(success_msg)
+
+            return {
+                "success": True,
+                "query": query,
+                "results": results_list,
+                "count": len(results_list),
+                "message": success_msg
+            }
+
+        except VectorStoreError as e:
+            error_msg = f"画像検索に失敗しました（クエリ: '{query}'）: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "query": query,
+                "results": [],
+                "count": 0,
+                "message": error_msg,
+                "error": "VectorStoreError",
+                "hint": "画像が登録されていることを確認してください"
+            }
+
+        except Exception as e:
+            error_msg = f"画像検索に失敗しました（クエリ: '{query}'）: {str(e)}"
             self.logger.error(error_msg, exc_info=True)
             return {
                 "success": False,
