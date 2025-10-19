@@ -1,7 +1,10 @@
-"""MCPサーバーのメインエントリーポイント。
+"""MCPサーバーのメインエントリーポイント（stdio トランスポート）。
 
 このモジュールは、RAG CLIアプリケーションのMCPサーバー実装を提供します。
-Claude DesktopなどのMCPクライアントから、RAG機能をツールとして利用できます。
+stdioプロトコル経由でMCPクライアントと通信します。
+Claude DesktopなどのローカルMCPクライアントから、RAG機能をツールとして利用できます。
+
+Note: リモート接続が必要な場合は、server_sse.py（SSEトランスポート）を使用してください。
 """
 
 import asyncio

@@ -655,11 +655,93 @@ def register_prompts(server: Server, handler):
    - すべてのツール呼び出しをログに記録
    - セキュリティイベントの監視
 
+## SSEトランスポート対応（実装済み）
+
+### 概要
+
+stdio トランスポートに加えて、SSE（Server-Sent Events）トランスポートをサポートしました。
+これにより、リモートからHTTP経由でMCPサーバーに接続できるようになります。
+
+### 利用可能なトランスポート
+
+| トランスポート | 起動コマンド | 用途 | ポート |
+|------------|------------|------|-------|
+| stdio | `uv run rag-mcp-server` | ローカル実行（Claude Desktop等） | - |
+| SSE | `uv run rag-mcp-server-sse` | リモート接続（HTTP経由） | 8000 (デフォルト) |
+
+### SSEサーバーの設定
+
+環境変数で設定可能：
+```bash
+# ホスト名（デフォルト: 127.0.0.1）
+export MCP_SSE_HOST=0.0.0.0
+
+# ポート番号（デフォルト: 8000）
+export MCP_SSE_PORT=8080
+```
+
+### SSEサーバーの起動
+
+```bash
+# デフォルト設定で起動（localhost:8000）
+uv run rag-mcp-server-sse
+
+# カスタムホスト・ポートで起動
+MCP_SSE_HOST=0.0.0.0 MCP_SSE_PORT=8080 uv run rag-mcp-server-sse
+```
+
+### SSEエンドポイント
+
+| エンドポイント | メソッド | 説明 |
+|------------|---------|------|
+| `/` | GET | サーバー情報 |
+| `/health` | GET | ヘルスチェック |
+| `/sse` | GET | SSE接続（イベントストリーム） |
+| `/messages` | POST | JSON-RPCメッセージ送信 |
+
+### クライアント接続例
+
+SSEクライアントからの接続：
+```javascript
+// SSE接続
+const eventSource = new EventSource('http://localhost:8000/sse');
+
+eventSource.addEventListener('endpoint', (e) => {
+  console.log('Message endpoint:', e.data);
+  // メッセージエンドポイントにJSON-RPCリクエストを送信
+});
+
+// JSON-RPCメッセージ送信
+fetch('http://localhost:8000/messages?session_id=xxx', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'tools/list',
+    id: 1
+  })
+});
+```
+
+### MCP クライアント設定例
+
+`claude_desktop_config.json` でSSEサーバーを設定：
+```json
+{
+  "mcpServers": {
+    "rag-mcp-server-sse": {
+      "type": "sse",
+      "url": "http://localhost:8000"
+    }
+  }
+}
+```
+
 ## 今後の拡張可能性
 
-1. **HTTP/WebSocket対応**
-   - stdio以外のトランスポート層サポート
-   - リモートアクセス対応
+1. **WebSocket対応**
+   - 双方向リアルタイム通信
+   - より効率的なメッセージング
 
 2. **マルチユーザー対応**
    - ユーザーごとのドキュメントコレクション分離
@@ -669,7 +751,12 @@ def register_prompts(server: Server, handler):
    - LLM生成結果のストリーミング返却
    - リアルタイムフィードバック
 
-4. **他のMCPクライアント対応**
+4. **認証・セキュリティ**
+   - APIキー認証
+   - CORS設定
+   - HTTPS対応
+
+5. **他のMCPクライアント対応**
    - VSCode拡張機能
    - カスタムアプリケーション
 
