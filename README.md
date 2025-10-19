@@ -37,6 +37,10 @@ Python + Ollama + LangChain + ChromaDBを使用したRAG（Retrieval-Augmented G
   - [質問と検索](#質問と検索)
   - [システム設定](#システム設定)
 - [設定のカスタマイズ](#設定のカスタマイズ)
+- [MCPサーバー](#mcpサーバー)
+  - [MCPとは](#mcpとは)
+  - [MCPサーバーのセットアップ](#mcpサーバーのセットアップ)
+  - [提供機能](#提供機能)
 - [開発者向け情報](#開発者向け情報)
 
 ## セットアップ
@@ -443,6 +447,194 @@ LOG_LEVEL=INFO
 ```
 
 設定変更後、再起動は不要です。次回実行時に自動的に反映されます。
+
+---
+
+## MCPサーバー
+
+### MCPとは
+
+MCP (Model Context Protocol) は、LLMアプリケーション（Claude Desktopなど）がローカルまたはリモートのデータソースやツールと連携するためのオープンプロトコルです。
+
+このRAGアプリケーションはMCPサーバーとして動作し、Claude Desktopから直接RAG機能を利用できます。
+
+**主な特徴:**
+- Claude Desktopの対話中にローカルドキュメントを検索
+- ツール呼び出しによるドキュメント管理
+- リソースとして登録済みドキュメント一覧を提供
+
+**参考:**
+- [MCP公式ドキュメント](https://modelcontextprotocol.io/)
+- [Claude Desktop MCP設定ガイド](https://docs.anthropic.com/claude/docs/model-context-protocol)
+
+### MCPサーバーのセットアップ
+
+#### 1. MCPサーバーの起動確認
+
+MCPサーバーは通常、Claude Desktopから自動的に起動されますが、手動で動作確認することもできます：
+
+```bash
+# MCPサーバーを起動（stdio経由で通信）
+uv run rag-mcp-server
+```
+
+**注意:** MCPサーバーはstdio経由で通信するため、手動起動時は対話的に操作できません。Claude Desktopなどのクライアントから接続する必要があります。
+
+#### 2. Claude Desktop設定
+
+Claude DesktopでこのMCPサーバーを使用するには、設定ファイルを編集します：
+
+**macOS:**
+```bash
+# 設定ファイルを開く
+nano ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+
+**Windows:**
+```bash
+# 設定ファイルを開く
+notepad %APPDATA%\Claude\claude_desktop_config.json
+```
+
+**設定例:**
+```json
+{
+  "mcpServers": {
+    "rag-mcp-server": {
+      "command": "uv",
+      "args": [
+        "run",
+        "rag-mcp-server"
+      ],
+      "cwd": "/path/to/rag-sample",
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434"
+      }
+    }
+  }
+}
+```
+
+**重要な設定項目:**
+- `cwd`: このRAGプロジェクトのディレクトリパスを指定（絶対パス）
+- `env.OLLAMA_BASE_URL`: Ollamaが別ポートで動作している場合は変更
+
+#### 3. Claude Desktopの再起動
+
+設定ファイルを保存したら、Claude Desktopを再起動します。正常に接続されると、ツール一覧にRAG関連のツールが表示されます。
+
+#### 4. 動作確認
+
+Claude Desktopで以下のように質問してみてください：
+
+```
+登録されているドキュメント一覧を取得してください
+```
+
+MCPサーバーが正常に動作していれば、`list_documents` ツールが呼び出され、登録済みドキュメントの一覧が表示されます。
+
+### 提供機能
+
+MCPサーバーは以下のツールとリソースを提供します：
+
+#### ツール（Tools）
+
+| ツール名 | 説明 | 主なパラメータ |
+|---------|------|--------------|
+| `add_document` | テキストまたは画像ドキュメントを追加 | `file_path` (必須)<br>`caption` (画像の場合)<br>`tags` (画像の場合) |
+| `list_documents` | 登録済みドキュメント一覧を取得 | `limit` (件数制限)<br>`include_images` (画像を含むか) |
+| `search` | キーワードでドキュメントを検索 | `query` (必須)<br>`top_k` (結果数) |
+| `remove_document` | ドキュメントまたは画像を削除 | `item_id` (必須)<br>`item_type` (document/image/auto) |
+
+**使用例（Claude Desktop上）:**
+
+```
+# ドキュメントを追加
+./docs/sample.txtをRAGシステムに追加してください
+
+# ドキュメントを検索
+「機械学習」に関連するドキュメントを検索してください
+
+# ドキュメントを削除
+doc_001を削除してください
+```
+
+#### リソース（Resources）
+
+| リソースURI | 説明 | 内容 |
+|-----------|------|------|
+| `resource://documents/list` | 全ドキュメント一覧 | テキストドキュメントと画像のメタデータ配列（JSON形式） |
+
+**使用例（Claude Desktop上）:**
+
+```
+登録されているドキュメントのリソースを確認してください
+```
+
+#### MCPサーバーの動作フロー
+
+```
+┌─────────────────┐
+│ Claude Desktop  │
+│   (MCPクライアント) │
+└────────┬────────┘
+         │ stdio通信
+         ▼
+┌─────────────────────┐
+│  RAG MCP Server     │
+│  (src/mcp/server.py)│
+├─────────────────────┤
+│ ツールハンドラー      │
+│ リソースハンドラー    │
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│  RAG Core           │
+│  (src/rag/)         │
+│  - vector_store     │
+│  - embeddings       │
+│  - engine           │
+└─────────────────────┘
+```
+
+**特徴:**
+- Claude DesktopとMCPサーバーはstdio（標準入出力）で通信
+- MCPサーバーは既存のRAGコア機能を呼び出すラッパー層
+- CLIとMCPサーバーは同じRAGコアを共有
+
+### トラブルシューティング
+
+**Q: Claude DesktopでMCPサーバーが認識されない**
+```bash
+# 1. 設定ファイルのパスが正しいか確認
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+# 2. uvコマンドが利用可能か確認
+which uv
+
+# 3. プロジェクトディレクトリで手動起動を試す
+cd /path/to/rag-sample
+uv run rag-mcp-server
+```
+
+**Q: ツール呼び出しがエラーになる**
+- Ollamaが起動しているか確認: `ollama list`
+- `.env` ファイルが存在し、正しい設定が含まれているか確認
+- `uv run rag status` でシステムステータスを確認
+
+**Q: 画像ドキュメントが追加できない**
+- 画像ファイルの拡張子が `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.webp` のいずれかか確認
+- ファイルパスが正しいか確認（絶対パスを推奨）
+
+**Q: MCPサーバーのログを確認したい**
+MCPサーバーは標準エラー出力にログを出力します。Claude Desktopのログは以下で確認できます：
+
+**macOS:**
+```bash
+# Claude Desktopのログを確認
+tail -f ~/Library/Logs/Claude/mcp*.log
+```
 
 ---
 
