@@ -5,12 +5,31 @@ MCPツール・リソースの呼び出しを実際のRAGコアロジックに�
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from ..rag.vector_store import VectorStore, VectorStoreError
+from ..rag.document_processor import DocumentProcessor, DocumentProcessorError, UnsupportedFileTypeError
+from ..rag.image_processor import ImageProcessor, ImageProcessorError
+from ..rag.vision_embeddings import VisionEmbeddings, VisionEmbeddingError
 from ..utils.config import get_config
 
 logger = logging.getLogger(__name__)
+
+# 画像ファイル拡張子の定義
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
+
+
+def _is_image_file(file_path: str) -> bool:
+    """ファイルが画像かどうかを拡張子から判定
+
+    Args:
+        file_path: チェックするファイルのパス
+
+    Returns:
+        画像ファイルの場合True
+    """
+    return Path(file_path).suffix.lower() in IMAGE_EXTENSIONS
 
 
 class ToolHandler:
@@ -46,6 +65,13 @@ class ToolHandler:
         from ..rag.embeddings import EmbeddingGenerator
         self.embedding_generator = EmbeddingGenerator(self.config)
 
+        # ドキュメントプロセッサの初期化（ドキュメント追加用）
+        self.document_processor = DocumentProcessor(self.config)
+
+        # 画像処理用コンポーネントの初期化（画像追加用）
+        self.vision_embeddings = VisionEmbeddings(self.config)
+        self.image_processor = ImageProcessor(self.vision_embeddings, self.config)
+
     async def handle_tool_call(self, name: str, arguments: dict) -> dict[str, Any]:
         """ツール呼び出しを処理します。
 
@@ -61,12 +87,200 @@ class ToolHandler:
         """
         self.logger.info(f"ツール呼び出し: {name}, 引数: {arguments}")
 
-        if name == "list_documents":
+        if name == "add_document":
+            return await self._add_document(**arguments)
+        elif name == "list_documents":
             return await self._list_documents(**arguments)
         elif name == "search":
             return await self._search(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
+
+    async def _add_document(
+        self,
+        file_path: str,
+        caption: str | None = None,
+        tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """ドキュメントまたは画像追加の実装。
+
+        Args:
+            file_path: 追加するファイルまたはディレクトリのパス
+            caption: 画像の場合のキャプション（オプション、画像ファイルのみ）
+            tags: 画像に付与するタグのリスト（オプション、画像ファイルのみ）
+
+        Returns:
+            追加結果とメタデータを含む辞書
+        """
+        try:
+            path = Path(file_path)
+
+            # ファイルの存在確認
+            if not path.exists():
+                return {
+                    "success": False,
+                    "message": f"ファイルまたはディレクトリが見つかりません: {file_path}",
+                    "error": "FileNotFoundError"
+                }
+
+            # ディレクトリの場合は未サポート
+            if path.is_dir():
+                return {
+                    "success": False,
+                    "message": "ディレクトリの一括追加は現在サポートされていません。個別のファイルを指定してください。",
+                    "error": "DirectoryNotSupported"
+                }
+
+            # 画像ファイルかどうかで処理を分岐
+            if _is_image_file(file_path):
+                return await self._add_image_file(file_path, caption, tags)
+            else:
+                return await self._add_document_file(file_path)
+
+        except Exception as e:
+            error_msg = f"ドキュメント追加に失敗しました: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": str(e)
+            }
+
+    async def _add_document_file(self, file_path: str) -> dict[str, Any]:
+        """テキストドキュメントファイルを追加
+
+        Args:
+            file_path: 追加するファイルのパス
+
+        Returns:
+            追加結果
+        """
+        try:
+            self.logger.info(f"テキストドキュメントを追加中: {file_path}")
+
+            # ドキュメントの処理
+            document, chunks = self.document_processor.process_document(file_path)
+
+            # 埋め込みの生成
+            chunk_texts = [chunk.content for chunk in chunks]
+            embeddings = self.embedding_generator.embed_documents(chunk_texts)
+
+            # ベクトルストアに追加
+            self.doc_vector_store.add_documents(chunks, embeddings)
+
+            success_msg = f"ドキュメント '{document.name}' を正常に追加しました"
+            self.logger.info(success_msg)
+
+            return {
+                "success": True,
+                "document_id": chunks[0].document_id if chunks else None,
+                "document_name": document.name,
+                "document_type": document.doc_type,
+                "chunks_count": len(chunks),
+                "total_size": document.size,
+                "message": success_msg
+            }
+
+        except UnsupportedFileTypeError as e:
+            error_msg = f"サポートされていないファイル形式です: {str(e)}"
+            self.logger.warning(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": "UnsupportedFileType"
+            }
+
+        except DocumentProcessorError as e:
+            error_msg = f"ドキュメント処理エラー: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": "DocumentProcessorError"
+            }
+
+        except Exception as e:
+            error_msg = f"テキストドキュメント追加に失敗しました: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": str(e)
+            }
+
+    async def _add_image_file(
+        self,
+        image_path: str,
+        caption: str | None = None,
+        tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """画像ファイルを追加
+
+        Args:
+            image_path: 追加する画像ファイルのパス
+            caption: 画像のキャプション（省略時は自動生成）
+            tags: タグのリスト
+
+        Returns:
+            追加結果
+        """
+        try:
+            self.logger.info(f"画像を追加中: {image_path}")
+
+            # 画像の読み込み
+            path = Path(image_path)
+            image = self.image_processor.load_image(
+                str(path),
+                caption=caption,
+                tags=tags or []
+            )
+
+            # 埋め込みの生成
+            embeddings = self.vision_embeddings.embed_images([image.file_path])
+
+            # ベクトルストアに追加
+            image_ids = self.img_vector_store.add_images([image], embeddings)
+
+            success_msg = f"画像 '{image.file_name}' を正常に追加しました"
+            self.logger.info(success_msg)
+
+            return {
+                "success": True,
+                "image_id": image_ids[0] if image_ids else None,
+                "file_name": image.file_name,
+                "image_type": image.image_type,
+                "caption": image.caption,
+                "tags": image.tags,
+                "message": success_msg
+            }
+
+        except ImageProcessorError as e:
+            error_msg = f"画像処理エラー: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": "ImageProcessorError"
+            }
+
+        except VisionEmbeddingError as e:
+            error_msg = f"ビジョン埋め込みエラー: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": "VisionEmbeddingError",
+                "hint": "Ollamaが起動していること、ビジョンモデル（llava等）がインストールされていることを確認してください"
+            }
+
+        except Exception as e:
+            error_msg = f"画像追加に失敗しました: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": str(e)
+            }
 
     async def _list_documents(
         self,

@@ -31,6 +31,29 @@ def register_tools(server: Server, handler: ToolHandler):
         """
         return [
             Tool(
+                name="add_document",
+                description="テキストまたは画像ドキュメントをRAGシステムに追加します。ファイルパスを指定して、テキストドキュメントまたは画像を登録できます。",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "追加するファイルまたはディレクトリのパス"
+                        },
+                        "caption": {
+                            "type": "string",
+                            "description": "画像の場合のキャプション（オプション、画像ファイルのみ）"
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "画像に付与するタグのリスト（オプション、画像ファイルのみ）"
+                        }
+                    },
+                    "required": ["file_path"]
+                }
+            ),
+            Tool(
                 name="list_documents",
                 description="RAGシステムに登録されているドキュメント一覧を取得します。テキストドキュメントと画像の両方を含みます。",
                 inputSchema={

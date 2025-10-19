@@ -82,7 +82,10 @@ class VisionEmbeddings:
         """
         try:
             models = self.client.list()
-            model_names = [model['name'].split(':')[0] for model in models.get('models', [])]
+            # ollamaライブラリの型は辞書のようにアクセスできないため、属性アクセスを使用
+            # modelオブジェクトの`model`属性にモデル名が格納されている（例: "llava:latest"）
+            model_list = models.get('models', []) if isinstance(models, dict) else models.models
+            model_names = [model.model.split(':')[0] for model in model_list]
             if self.model_name not in model_names:
                 raise VisionEmbeddingError(
                     f"Vision model '{self.model_name}' is not available. "
@@ -122,6 +125,8 @@ class VisionEmbeddings:
         """画像をベクトル化
 
         画像ファイルを読み込み、ベクトル表現を生成します。
+        画像の詳細なキャプションを生成し、そのテキストをベクトル化することで
+        画像の意味的な埋め込みを作成します。
 
         Args:
             image_path: ベクトル化する画像ファイルのパス
@@ -148,22 +153,63 @@ class VisionEmbeddings:
 
         try:
             logger.debug(f"Generating embedding for image: {path.name}")
-            # Ollamaのembeddings APIを使用
-            response = self.client.embeddings(
-                model=self.model_name,
-                prompt="",  # 画像のみの場合は空文字列
-                images=[str(path)]
+
+            # ステップ1: 画像の詳細な説明を生成
+            # より包括的なプロンプトで画像の内容を詳しく抽出
+            caption_prompt = (
+                "この画像について、以下の観点から詳しく説明してください:\n"
+                "1. 何が写っているか（オブジェクト、人物、場所など）\n"
+                "2. 色、形、テクスチャなどの視覚的特徴\n"
+                "3. 画像の雰囲気や文脈\n"
+                "4. テキストが含まれている場合はその内容\n"
+                "簡潔かつ具体的に記述してください。"
             )
-            embedding = response.get('embedding', [])
+
+            response = self.client.chat(
+                model=self.model_name,
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': caption_prompt,
+                        'images': [str(path)]
+                    }
+                ],
+                options={
+                    'num_predict': 500,  # より詳細な説明を得るために長めに設定
+                }
+            )
+
+            caption = response.get('message', {}).get('content', '').strip()
+            if not caption:
+                raise VisionEmbeddingError(
+                    f"Empty caption returned for image: {image_path}"
+                )
+
+            logger.debug(f"Generated caption for {path.name}: {caption[:100]}...")
+
+            # ステップ2: キャプションのテキストをベクトル化
+            # テキスト埋め込みモデルを使用（nomic-embed-textなど）
+            embedding_model = getattr(
+                self.config, 'ollama_embedding_model', 'nomic-embed-text'
+            )
+
+            embed_response = self.client.embeddings(
+                model=embedding_model,
+                prompt=caption
+            )
+
+            embedding = embed_response.get('embedding', [])
             if not embedding:
                 raise VisionEmbeddingError(
-                    f"Empty embedding returned for image: {image_path}"
+                    f"Empty embedding returned for caption of image: {image_path}"
                 )
+
             logger.debug(
                 f"Successfully generated embedding (dim: {len(embedding)}) "
                 f"for {path.name}"
             )
             return embedding
+
         except ollama.ResponseError as e:
             raise VisionEmbeddingError(
                 f"Failed to embed image '{image_path}': {e}"

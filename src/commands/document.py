@@ -703,13 +703,13 @@ def _list_images(limit: Optional[int], format: str, verbose: bool):
             output = []
             for img in images:
                 output.append({
-                    'id': img['id'],
-                    'file_name': img['file_name'],
-                    'file_path': img['file_path'],
-                    'image_type': img['image_type'],
-                    'caption': img['caption'],
-                    'tags': img.get('tags', []),
-                    'created_at': img['created_at'],
+                    'id': img.id,
+                    'file_name': img.file_name,
+                    'file_path': str(img.file_path),
+                    'image_type': img.image_type,
+                    'caption': img.caption,
+                    'tags': img.metadata.get('tags', []),
+                    'created_at': img.created_at.isoformat(),
                 })
             console.print(json.dumps(output, ensure_ascii=False, indent=2))
             return
@@ -728,22 +728,27 @@ def _list_images(limit: Optional[int], format: str, verbose: bool):
         # 画像情報を追加
         for img in images:
             # キャプションを短縮
-            caption = img['caption']
+            caption = img.caption
             if len(caption) > 50:
                 caption = caption[:47] + "..."
 
             row = [
-                img['file_name'],
-                img['image_type'].upper(),
+                img.file_name,
+                img.image_type.upper(),
                 caption,
             ]
 
             if verbose:
-                tags_str = ", ".join(img.get('tags', []))
+                # tagsは文字列化されたリストかもしれないので適切に処理
+                tags = img.metadata.get('tags', [])
+                if isinstance(tags, list):
+                    tags_str = ", ".join(tags)
+                else:
+                    tags_str = str(tags) if tags else ""
                 row.extend([
-                    img['id'][:8] + "...",  # IDの最初の8文字のみ表示
+                    img.id[:8] + "...",  # IDの最初の8文字のみ表示
                     tags_str if tags_str else "-",
-                    img['created_at'][:19],  # 秒まで表示
+                    img.created_at.isoformat()[:19],  # 秒まで表示
                 ])
 
             table.add_row(*row)
@@ -760,7 +765,7 @@ def _list_images(limit: Optional[int], format: str, verbose: bool):
             # 画像タイプの集計
             type_counts = {}
             for img in images:
-                img_type = img['image_type']
+                img_type = img.image_type
                 type_counts[img_type] = type_counts.get(img_type, 0) + 1
 
             console.print(f"  画像タイプ別:")

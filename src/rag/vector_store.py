@@ -488,12 +488,20 @@ class VectorStore:
                     'created_at': img.created_at.isoformat(),
                     'source': 'local',
                 }
-                # 追加のメタデータをマージ
+                # 追加のメタデータをマージ（ChromaDBがサポートする型のみ）
+                # ChromaDBは str, int, float, bool, None のみサポート
                 if img.metadata:
-                    metadata.update({
-                        f"custom_{k}": v for k, v in img.metadata.items()
-                        if k not in metadata
-                    })
+                    for k, v in img.metadata.items():
+                        if k not in metadata:
+                            # ChromaDBがサポートする型のみ追加
+                            if isinstance(v, (str, int, float, bool, type(None))):
+                                metadata[f"custom_{k}"] = v
+                            elif isinstance(v, (list, dict)):
+                                # リストや辞書は文字列に変換
+                                metadata[f"custom_{k}"] = str(v)
+                            else:
+                                # その他の型も文字列に変換
+                                metadata[f"custom_{k}"] = str(v)
                 metadatas.append(metadata)
 
             logger.info(f"{len(images)}個の画像を{collection_name}コレクションに追加中...")
