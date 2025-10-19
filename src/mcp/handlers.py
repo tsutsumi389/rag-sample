@@ -560,12 +560,16 @@ class ResourceHandler:
         Raises:
             ValueError: 未知のリソースURIの場合
         """
-        self.logger.info(f"リソース読み取り: {uri}")
+        self.logger.info(f"リソース読み取り: {uri} (型: {type(uri).__name__})")
 
-        if uri == "resource://documents/list":
+        # URIを文字列に変換（AnyUrl型の可能性があるため）
+        uri_str = str(uri)
+        self.logger.debug(f"URIを文字列化: '{uri_str}'")
+
+        if uri_str == "resource://documents/list":
             return await self._get_documents_list()
         else:
-            raise ValueError(f"Unknown resource: {uri}")
+            raise ValueError(f"Unknown resource: {uri_str}")
 
     async def _get_documents_list(self) -> dict[str, Any]:
         """ドキュメント一覧取得の実装。

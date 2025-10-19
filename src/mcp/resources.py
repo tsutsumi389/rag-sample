@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 from mcp.server import Server
-from mcp.types import Resource, TextContent
+from mcp.types import Resource
 
 from .handlers import ResourceHandler
 
@@ -48,16 +48,23 @@ def register_resources(server: Server, handler: ResourceHandler):
         Returns:
             リソースの内容（JSON文字列）
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
+            logger.info(f"read_resource called with URI: {uri} (type: {type(uri).__name__})")
+
             # ハンドラーでリソースを読み取り
             result = await handler.handle_resource_read(uri)
 
             # 結果をJSON形式で返す
             result_text = json.dumps(result, ensure_ascii=False, indent=2)
 
+            logger.info(f"Successfully read resource: {uri}")
             return result_text
 
         except Exception as e:
+            logger.error(f"Failed to read resource '{uri}': {e}", exc_info=True)
             error_result = {
                 "success": False,
                 "error": str(e),
