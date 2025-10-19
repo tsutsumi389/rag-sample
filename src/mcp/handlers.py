@@ -93,6 +93,8 @@ class ToolHandler:
             return await self._list_documents(**arguments)
         elif name == "search":
             return await self._search(**arguments)
+        elif name == "remove_document":
+            return await self._remove_document(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -408,6 +410,111 @@ class ToolHandler:
                 "query": query,
                 "results": [],
                 "count": 0,
+                "message": error_msg,
+                "error": str(e)
+            }
+
+    async def _remove_document(
+        self,
+        item_id: str,
+        item_type: str = "auto"
+    ) -> dict[str, Any]:
+        """ドキュメントまたは画像削除の実装。
+
+        Args:
+            item_id: 削除するドキュメントIDまたは画像ID
+            item_type: 削除するアイテムのタイプ（'document', 'image', 'auto'）
+
+        Returns:
+            削除結果とメタデータを含む辞書
+        """
+        try:
+            self.logger.info(f"削除リクエスト: ID='{item_id}', タイプ='{item_type}'")
+
+            # ドキュメントとして削除を試行
+            if item_type in ["document", "auto"]:
+                try:
+                    # ドキュメントの存在確認
+                    documents = self.doc_vector_store.list_documents()
+                    target_doc = None
+                    for doc in documents:
+                        if doc['document_id'] == item_id:
+                            target_doc = doc
+                            break
+
+                    if target_doc:
+                        # ドキュメントとして削除
+                        deleted_count = self.doc_vector_store.delete(document_id=item_id)
+                        success_msg = f"ドキュメント '{target_doc['document_name']}' を削除しました"
+                        self.logger.info(success_msg)
+
+                        return {
+                            "success": True,
+                            "item_type": "document",
+                            "item_id": item_id,
+                            "document_name": target_doc['document_name'],
+                            "deleted_chunks": deleted_count,
+                            "message": success_msg
+                        }
+                except VectorStoreError as e:
+                    self.logger.warning(f"ドキュメント削除エラー: {e}")
+                    if item_type == "document":
+                        # documentタイプ指定の場合はエラーとして返す
+                        return {
+                            "success": False,
+                            "message": f"ドキュメントの削除に失敗しました: {str(e)}",
+                            "error": "VectorStoreError"
+                        }
+
+            # 画像として削除を試行
+            if item_type in ["image", "auto"]:
+                try:
+                    # 画像の存在確認と取得
+                    image = self.img_vector_store.get_image_by_id(item_id)
+
+                    if image:
+                        # 画像として削除
+                        success = self.img_vector_store.remove_image(item_id)
+                        if success:
+                            success_msg = f"画像 '{image.file_name}' を削除しました"
+                            self.logger.info(success_msg)
+
+                            return {
+                                "success": True,
+                                "item_type": "image",
+                                "item_id": item_id,
+                                "file_name": image.file_name,
+                                "message": success_msg
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "message": f"画像ID '{item_id}' の削除に失敗しました",
+                                "error": "DeleteFailed"
+                            }
+                except VectorStoreError as e:
+                    self.logger.warning(f"画像削除エラー: {e}")
+                    if item_type == "image":
+                        # imageタイプ指定の場合はエラーとして返す
+                        return {
+                            "success": False,
+                            "message": f"画像の削除に失敗しました: {str(e)}",
+                            "error": "VectorStoreError"
+                        }
+
+            # どちらでも見つからなかった場合
+            return {
+                "success": False,
+                "message": f"ID '{item_id}' のドキュメントまたは画像が見つかりませんでした",
+                "error": "NotFound"
+            }
+
+        except Exception as e:
+            error_msg = f"削除に失敗しました（ID: '{item_id}'）: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "item_id": item_id,
                 "message": error_msg,
                 "error": str(e)
             }

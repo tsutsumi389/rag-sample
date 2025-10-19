@@ -92,6 +92,26 @@ def register_tools(server: Server, handler: ToolHandler):
                     "required": ["query"]
                 }
             ),
+            Tool(
+                name="remove_document",
+                description="ドキュメントまたは画像をIDで削除します。テキストドキュメントIDまたは画像IDを指定して、RAGシステムから削除できます。",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "item_id": {
+                            "type": "string",
+                            "description": "削除するドキュメントIDまたは画像ID"
+                        },
+                        "item_type": {
+                            "type": "string",
+                            "description": "削除するアイテムのタイプ（'document' または 'image'）。省略時は自動判定します。",
+                            "enum": ["document", "image", "auto"],
+                            "default": "auto"
+                        }
+                    },
+                    "required": ["item_id"]
+                }
+            ),
         ]
 
     @server.call_tool()
