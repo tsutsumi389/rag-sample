@@ -58,4 +58,6 @@ markers = [
     "unit: ユニットテスト（外部依存なし）",
     "integration: 統合テスト（外部依存あり）",
     "slow: 実行時間が長いテスト",
+    "multimodal: マルチモーダル機能のテスト（画像処理含む）",
+    "performance: パフォーマンステスト",
 ]
