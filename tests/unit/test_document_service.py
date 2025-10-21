@@ -268,12 +268,21 @@ class TestSearchDocuments:
         """ドキュメント検索成功"""
         # モックの検索結果
         mock_chunk = Chunk(
-            chunk_id="chunk1",
             content="test content",
+            chunk_id="chunk1",
+            document_id="doc1",
+            chunk_index=0,
+            start_char=0,
+            end_char=100,
             metadata={"document_name": "test.txt", "document_id": "doc1", "chunk_index": 0}
         )
         from src.models.document import SearchResult
-        mock_result = SearchResult(chunk=mock_chunk, score=0.95)
+        mock_result = SearchResult(
+            chunk=mock_chunk,
+            score=0.95,
+            document_name="test.txt",
+            document_source="/path/to/test.txt"
+        )
 
         document_service.embedding_generator.embed_query = Mock(return_value=[0.1] * 768)
         document_service.doc_vector_store.search = Mock(return_value=[mock_result])
@@ -294,14 +303,23 @@ class TestSearchImages:
     def test_search_images_success(self, document_service):
         """画像検索成功"""
         # モックの検索結果
-        from src.models.document import ImageSearchResult, Chunk
-        mock_chunk = Chunk(chunk_id="img1", content="", metadata={})
-        mock_result = ImageSearchResult(
+        from src.models.document import SearchResult, Chunk
+        mock_chunk = Chunk(
+            content="",
+            chunk_id="img1",
+            document_id="img1",
+            chunk_index=0,
+            start_char=0,
+            end_char=0,
+            metadata={"image_type": "jpg", "tags": [], "added_at": "2024-01-01"}
+        )
+        mock_result = SearchResult(
             chunk=mock_chunk,
             score=0.9,
-            rank=1,
             document_name="test.jpg",
             document_source="/path/to/test.jpg",
+            rank=1,
+            result_type="image",
             image_path=Path("/path/to/test.jpg"),
             caption="test image",
             metadata={"image_type": "jpg", "tags": [], "added_at": "2024-01-01"}
