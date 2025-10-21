@@ -23,6 +23,8 @@ from ..rag.embeddings import EmbeddingGenerator, EmbeddingError
 from ..rag.vision_embeddings import VisionEmbeddings, VisionEmbeddingError
 from ..rag.image_processor import ImageProcessor, ImageProcessorError
 from ..utils.config import get_config
+from ..services.file_utils import is_image_file
+from ..services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -31,22 +33,6 @@ console = Console()
 class DocumentCommandError(Exception):
     """ドキュメントコマンドのエラー"""
     pass
-
-
-# 画像ファイル拡張子の定義
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
-
-
-def _is_image_file(file_path: str) -> bool:
-    """ファイルが画像かどうかを拡張子から判定
-
-    Args:
-        file_path: チェックするファイルのパス
-
-    Returns:
-        画像ファイルの場合True
-    """
-    return Path(file_path).suffix.lower() in IMAGE_EXTENSIONS
 
 
 @click.command('add')
@@ -103,7 +89,7 @@ def add_command(file_path: str, document_id: Optional[str], caption: Optional[st
         return
 
     # ファイルの場合は拡張子で判定
-    if _is_image_file(file_path):
+    if is_image_file(file_path):
         _add_image_file(file_path, caption, tags, verbose)
     else:
         _add_document_file(file_path, document_id, verbose)
@@ -311,8 +297,8 @@ def _add_from_directory(directory_path: str, document_id: Optional[str], caption
         return
 
     # 画像ファイルとドキュメントファイルに分類
-    image_files = [f for f in all_files if _is_image_file(str(f))]
-    document_files = [f for f in all_files if not _is_image_file(str(f))]
+    image_files = [f for f in all_files if is_image_file(str(f))]
+    document_files = [f for f in all_files if not is_image_file(str(f))]
 
     # 結果の表示
     console.print(f"\n[cyan]ディレクトリ分析結果:[/cyan]")
@@ -483,17 +469,15 @@ def remove_command(item_id: str, yes: bool, verbose: bool):
         verbose: 詳細情報を表示するか
     """
     try:
-        # 設定の読み込み
+        # 設定の読み込みとサービスの初期化
         config = get_config()
-
-        # ベクトルストアの初期化
-        vector_store = VectorStore(config)
-        vector_store.initialize()
+        document_service = DocumentService(config)
 
         # まずドキュメントとして検索
-        documents = vector_store.list_documents()
+        list_result = document_service.list_documents()
+
         target_doc = None
-        for doc in documents:
+        for doc in list_result.get("documents", []):
             if doc['document_id'] == item_id:
                 target_doc = doc
                 break
@@ -518,26 +502,34 @@ def remove_command(item_id: str, yes: bool, verbose: bool):
                 console=console,
             ) as progress:
                 task = progress.add_task("削除中...", total=None)
-                deleted_count = vector_store.delete(document_id=item_id)
+                result = document_service.remove_document(item_id, item_type="document")
                 progress.update(task, description="完了", completed=True)
 
-            # 成功メッセージ
-            console.print(
-                f"\n[green]✓[/green] ドキュメント '{target_doc['document_name']}' を削除しました"
-            )
-            console.print(f"  削除されたチャンク数: {deleted_count}")
+            if result.get("success"):
+                console.print(
+                    f"\n[green]✓[/green] {result.get('message')}"
+                )
+                console.print(f"  削除されたチャンク数: {result.get('deleted_chunks', 0)}")
+            else:
+                console.print(f"\n[red]✗ エラー:[/red] {result.get('message')}", style="bold red")
+                raise click.Abort()
             return
 
         # ドキュメントとして見つからなければ画像として検索
-        image = vector_store.get_image_by_id(item_id)
+        target_image = None
+        for img in list_result.get("images", []):
+            if img.get('id') == item_id:
+                target_image = img
+                break
 
-        if image:
+        if target_image:
             # 削除確認
             if not yes:
                 console.print(f"\n削除する画像:")
-                console.print(f"  ファイル名: {image['file_name']}")
-                console.print(f"  パス: {image['file_path']}")
-                caption_preview = image['caption'][:50] + "..." if len(image['caption']) > 50 else image['caption']
+                console.print(f"  ファイル名: {target_image['file_name']}")
+                console.print(f"  パス: {target_image['file_path']}")
+                caption = target_image['caption']
+                caption_preview = caption[:50] + "..." if len(caption) > 50 else caption
                 console.print(f"  キャプション: {caption_preview}")
 
                 if not click.confirm("\n本当に削除しますか?", default=False):
@@ -551,11 +543,11 @@ def remove_command(item_id: str, yes: bool, verbose: bool):
                 console=console,
             ) as progress:
                 task = progress.add_task("削除中...", total=None)
-                success = vector_store.remove_image(item_id)
+                result = document_service.remove_document(item_id, item_type="image")
                 progress.update(task, description="完了", completed=True)
 
-            if success:
-                console.print(f"\n[green]✓[/green] 画像 '{image['file_name']}' を削除しました")
+            if result.get("success"):
+                console.print(f"\n[green]✓[/green] {result.get('message')}")
             else:
                 console.print(f"\n[yellow]警告:[/yellow] 画像の削除に失敗しました")
             return
@@ -568,7 +560,7 @@ def remove_command(item_id: str, yes: bool, verbose: bool):
         console.print("\nドキュメントにも画像にも該当するIDが存在しません")
         if verbose:
             console.print("\n利用可能なドキュメントID:")
-            for doc in documents:
+            for doc in list_result.get("documents", []):
                 console.print(f"  - {doc['document_id']}")
             console.print("\n利用可能な画像IDを確認するには:")
             console.print("  $ rag list --type image -v")
