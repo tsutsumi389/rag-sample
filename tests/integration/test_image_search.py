@@ -257,8 +257,8 @@ class TestImageSearch:
             # 3. 画像を取得
             retrieved_image = vector_store.get_image_by_id(image_id)
             assert retrieved_image is not None
-            assert retrieved_image['id'] == image_id
-            print(f"Retrieved image: {retrieved_image['file_name']}")
+            assert retrieved_image.id == image_id
+            print(f"Retrieved image: {retrieved_image.file_name}")
 
             # 4. 画像を削除
             success = vector_store.remove_image(image_id)
@@ -270,7 +270,7 @@ class TestImageSearch:
             assert removed_image is None
 
             images_after = vector_store.list_images()
-            assert not any(img['id'] == image_id for img in images_after)
+            assert not any(img.id == image_id for img in images_after)
 
         finally:
             # クリーンアップ

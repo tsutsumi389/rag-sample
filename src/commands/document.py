@@ -848,46 +848,78 @@ def list_command(limit: Optional[int], type: str, format: str, verbose: bool):
     help='確認をスキップ',
 )
 @click.option(
+    '--text-only',
+    is_flag=True,
+    help='テキストドキュメントのみ削除',
+)
+@click.option(
+    '--images-only',
+    is_flag=True,
+    help='画像のみ削除',
+)
+@click.option(
     '--verbose',
     '-v',
     is_flag=True,
     help='詳細情報を表示',
 )
-def clear_command(yes: bool, verbose: bool):
-    """ベクトルストア内のすべてのドキュメントを削除
+def clear_command(yes: bool, text_only: bool, images_only: bool, verbose: bool):
+    """ベクトルストア内のすべてのドキュメントと画像を削除
 
-    警告: この操作は取り消せません。すべてのドキュメントとチャンクが削除されます。
+    警告: この操作は取り消せません。すべてのドキュメント、画像、チャンクが削除されます。
 
     Args:
         yes: 確認をスキップするか
+        text_only: テキストドキュメントのみ削除するか
+        images_only: 画像のみ削除するか
         verbose: 詳細情報を表示するか
     """
     try:
-        # 設定の読み込み
+        # 設定の読み込みとサービス初期化
         config = get_config()
+        document_service = DocumentService(config)
 
-        # ベクトルストアの初期化
-        vector_store = VectorStore(config)
-        vector_store.initialize()
+        # フラグの処理
+        clear_text = not images_only  # images_onlyでなければテキストも削除
+        clear_images = not text_only  # text_onlyでなければ画像も削除
 
-        # ドキュメント数の取得
-        document_count = vector_store.get_document_count()
+        # 現在の状態を取得
+        list_result = document_service.list_documents(include_images=True)
+        text_count = len(list_result.get("documents", []))
+        image_count = len(list_result.get("images", []))
 
-        if document_count == 0:
+        if text_count == 0 and image_count == 0:
             console.print("[yellow]ベクトルストアは既に空です[/yellow]")
             return
 
+        # 削除対象がない場合
+        if clear_text and text_count == 0:
+            console.print("[yellow]テキストドキュメントはありません[/yellow]")
+            if not clear_images:
+                return
+        if clear_images and image_count == 0:
+            console.print("[yellow]画像はありません[/yellow]")
+            if not clear_text:
+                return
+
         # ドキュメント情報の表示
         if verbose:
-            documents = vector_store.list_documents()
-            console.print(f"\n削除されるドキュメント数: {len(documents)}")
-            console.print(f"削除されるチャンク数: {document_count}")
+            if clear_text and text_count > 0:
+                console.print(f"\n削除されるテキストドキュメント数: {text_count}")
+            if clear_images and image_count > 0:
+                console.print(f"削除される画像数: {image_count}")
 
         # 削除確認
         if not yes:
+            delete_items = []
+            if clear_text and text_count > 0:
+                delete_items.append(f"テキストドキュメント {text_count}個")
+            if clear_images and image_count > 0:
+                delete_items.append(f"画像 {image_count}個")
+
             console.print(
                 f"\n[red bold]警告:[/red bold] "
-                f"すべてのドキュメント（{document_count}チャンク）を削除します"
+                f"{', '.join(delete_items)}を削除します"
             )
             console.print("[yellow]この操作は取り消せません[/yellow]")
 
@@ -907,21 +939,27 @@ def clear_command(yes: bool, verbose: bool):
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task("すべてのドキュメントを削除中...", total=None)
-            vector_store.clear()
+            task = progress.add_task("削除中...", total=None)
+            result = document_service.clear_documents(
+                clear_text=clear_text,
+                clear_images=clear_images
+            )
             progress.update(task, description="完了", completed=True)
 
-        # 成功メッセージ
-        console.print(
-            f"\n[green]✓[/green] すべてのドキュメントを削除しました"
-        )
-        console.print(f"  削除されたチャンク数: {document_count}")
-
-    except VectorStoreError as e:
-        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("ベクトルストアエラーの詳細")
-        raise click.Abort()
+        # 結果の表示
+        if result.get("success"):
+            console.print(f"\n[green]✓[/green] {result.get('message')}")
+            if verbose:
+                console.print(f"  削除されたテキストドキュメント: {result.get('deleted_text_count', 0)}個")
+                console.print(f"  削除された画像: {result.get('deleted_image_count', 0)}個")
+                console.print(f"  合計: {result.get('total_deleted', 0)}個")
+        else:
+            console.print(f"[red]✗ エラー:[/red] {result.get('message')}", style="bold red")
+            if "errors" in result:
+                console.print("\n詳細なエラー:")
+                for error in result.get("errors", []):
+                    console.print(f"  - {error}")
+            raise click.Abort()
 
     except Exception as e:
         console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")
@@ -953,26 +991,24 @@ def clear_images_command(yes: bool, verbose: bool):
 
     警告: この操作は取り消せません。すべての画像が削除されます。
 
+    注意: このコマンドは `rag clear --images-only` と同等です。
+
     Args:
         yes: 確認をスキップするか
         verbose: 詳細情報を表示するか
     """
     try:
-        # 設定の読み込み
+        # 設定の読み込みとサービス初期化
         config = get_config()
+        document_service = DocumentService(config)
 
-        # ベクトルストアの初期化
-        vector_store = VectorStore(config)
-        vector_store.initialize()
+        # 現在の状態を取得
+        list_result = document_service.list_documents(include_images=True)
+        image_count = len(list_result.get("images", []))
 
-        # 画像一覧の取得
-        images = vector_store.list_images()
-
-        if not images:
+        if image_count == 0:
             console.print("[yellow]ベクトルストアに画像がありません[/yellow]")
             return
-
-        image_count = len(images)
 
         # 画像情報の表示
         if verbose:
@@ -1003,24 +1039,25 @@ def clear_images_command(yes: bool, verbose: bool):
             console=console,
         ) as progress:
             task = progress.add_task("すべての画像を削除中...", total=None)
-
-            # すべての画像を個別に削除
-            deleted_count = 0
-            for image in images:
-                if vector_store.remove_image(image['id']):
-                    deleted_count += 1
-
+            result = document_service.clear_documents(
+                clear_text=False,
+                clear_images=True
+            )
             progress.update(task, description="完了", completed=True)
 
-        # 成功メッセージ
-        console.print(f"\n[green]✓[/green] すべての画像を削除しました")
-        console.print(f"  削除された画像数: {deleted_count}")
-
-    except VectorStoreError as e:
-        console.print(f"[red]✗ ベクトルストアエラー:[/red] {e}", style="bold red")
-        if verbose:
-            logger.exception("ベクトルストアエラーの詳細")
-        raise click.Abort()
+        # 結果の表示
+        if result.get("success"):
+            console.print(f"\n[green]✓[/green] すべての画像を削除しました")
+            console.print(f"  削除された画像数: {result.get('deleted_image_count', 0)}")
+            if verbose:
+                console.print(f"  合計: {result.get('total_deleted', 0)}個")
+        else:
+            console.print(f"[red]✗ エラー:[/red] {result.get('message')}", style="bold red")
+            if "errors" in result:
+                console.print("\n詳細なエラー:")
+                for error in result.get("errors", []):
+                    console.print(f"  - {error}")
+            raise click.Abort()
 
     except Exception as e:
         console.print(f"[red]✗ 予期しないエラー:[/red] {e}", style="bold red")

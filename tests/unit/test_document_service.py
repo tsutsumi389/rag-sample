@@ -349,3 +349,133 @@ class TestSearchImages:
         assert result["success"] is False
         assert result["error"] == "VectorStoreError"
         assert "hint" in result
+
+
+class TestClearDocuments:
+    """clear_documentsメソッドのテスト"""
+
+    def test_clear_all_success(self, document_service):
+        """すべてのドキュメントと画像を削除成功"""
+        # モックの設定
+        document_service.doc_vector_store.list_documents = Mock(
+            return_value=[
+                {"document_id": "doc1", "document_name": "test1.txt"},
+                {"document_id": "doc2", "document_name": "test2.txt"}
+            ]
+        )
+        document_service.img_vector_store.list_images = Mock(
+            return_value=[
+                Mock(id="img1", file_name="image1.jpg"),
+                Mock(id="img2", file_name="image2.jpg")
+            ]
+        )
+        document_service.doc_vector_store.clear = Mock()
+        document_service.img_vector_store.clear = Mock()
+
+        # 実行
+        result = document_service.clear_documents()
+
+        # 検証
+        assert result["success"] is True
+        assert result["deleted_text_count"] == 2
+        assert result["deleted_image_count"] == 2
+        assert result["total_deleted"] == 4
+        assert "すべてのドキュメントを削除しました" in result["message"]
+
+    def test_clear_text_only(self, document_service):
+        """テキストドキュメントのみ削除"""
+        # モックの設定
+        document_service.doc_vector_store.list_documents = Mock(
+            return_value=[{"document_id": "doc1", "document_name": "test1.txt"}]
+        )
+        document_service.doc_vector_store.clear = Mock()
+        document_service.img_vector_store.clear = Mock()
+
+        # 実行
+        result = document_service.clear_documents(clear_text=True, clear_images=False)
+
+        # 検証
+        assert result["success"] is True
+        assert result["deleted_text_count"] == 1
+        assert result["deleted_image_count"] == 0
+        assert result["total_deleted"] == 1
+
+    def test_clear_images_only(self, document_service):
+        """画像のみ削除"""
+        # モックの設定
+        document_service.img_vector_store.list_images = Mock(
+            return_value=[Mock(id="img1", file_name="image1.jpg")]
+        )
+        document_service.doc_vector_store.clear = Mock()
+        document_service.img_vector_store.clear = Mock()
+
+        # 実行
+        result = document_service.clear_documents(clear_text=False, clear_images=True)
+
+        # 検証
+        assert result["success"] is True
+        assert result["deleted_text_count"] == 0
+        assert result["deleted_image_count"] == 1
+        assert result["total_deleted"] == 1
+
+    def test_clear_with_text_error(self, document_service):
+        """テキストドキュメント削除でエラー"""
+        # モックの設定
+        document_service.doc_vector_store.list_documents = Mock(
+            return_value=[{"document_id": "doc1"}]
+        )
+        document_service.doc_vector_store.clear = Mock(
+            side_effect=VectorStoreError("Clear failed")
+        )
+        # 画像が1件あると全体がエラーになる
+        document_service.img_vector_store.list_images = Mock(
+            return_value=[Mock(id="img1")]
+        )
+        document_service.img_vector_store.clear = Mock(
+            side_effect=VectorStoreError("Image clear also failed")
+        )
+
+        # 実行
+        result = document_service.clear_documents()
+
+        # 検証
+        assert result["success"] is False
+        assert "errors" in result
+        assert len(result["errors"]) == 2  # 両方失敗
+
+    def test_clear_with_image_error(self, document_service):
+        """画像削除でエラー"""
+        # モックの設定
+        document_service.doc_vector_store.list_documents = Mock(return_value=[])
+        document_service.doc_vector_store.clear = Mock()
+        document_service.img_vector_store.list_images = Mock(
+            return_value=[Mock(id="img1")]
+        )
+        document_service.img_vector_store.clear = Mock(
+            side_effect=VectorStoreError("Image clear failed")
+        )
+
+        # 実行
+        result = document_service.clear_documents()
+
+        # 検証
+        assert result["success"] is False
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+
+    def test_clear_empty_store(self, document_service):
+        """空のストアをクリア"""
+        # モックの設定
+        document_service.doc_vector_store.list_documents = Mock(return_value=[])
+        document_service.img_vector_store.list_images = Mock(return_value=[])
+        document_service.doc_vector_store.clear = Mock()
+        document_service.img_vector_store.clear = Mock()
+
+        # 実行
+        result = document_service.clear_documents()
+
+        # 検証
+        assert result["success"] is True
+        assert result["deleted_text_count"] == 0
+        assert result["deleted_image_count"] == 0
+        assert result["total_deleted"] == 0

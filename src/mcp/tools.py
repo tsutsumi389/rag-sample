@@ -132,6 +132,25 @@ def register_tools(server: Server, handler: ToolHandler):
                     "required": ["query"]
                 }
             ),
+            Tool(
+                name="clear_documents",
+                description="RAGシステム内のすべてのドキュメントと画像を削除します。警告: この操作は取り消せません。",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "clear_text": {
+                            "type": "boolean",
+                            "description": "テキストドキュメントを削除するか（デフォルト: true）",
+                            "default": True
+                        },
+                        "clear_images": {
+                            "type": "boolean",
+                            "description": "画像を削除するか（デフォルト: true）",
+                            "default": True
+                        }
+                    }
+                }
+            ),
         ]
 
     @server.call_tool()

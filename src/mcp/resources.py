@@ -29,7 +29,7 @@ def register_resources(server: Server, handler: ResourceHandler):
         Returns:
             リソース定義のリスト
         """
-        return [
+        resources = [
             Resource(
                 uri="resource://documents/list",
                 name="ドキュメント一覧",
@@ -37,6 +37,41 @@ def register_resources(server: Server, handler: ResourceHandler):
                 mimeType="application/json"
             ),
         ]
+
+        # 各ドキュメントのリソースを動的に追加
+        try:
+            doc_list = await handler.handle_resource_read("resource://documents/list")
+
+            # テキストドキュメントのリソース
+            for doc in doc_list.get("documents", []):
+                doc_id = doc.get("document_id")
+                doc_name = doc.get("document_name", "Unknown")
+                resources.append(
+                    Resource(
+                        uri=f"resource://documents/{doc_id}",
+                        name=f"ドキュメント: {doc_name}",
+                        description=f"ドキュメント '{doc_name}' の詳細情報とチャンク一覧",
+                        mimeType="application/json"
+                    )
+                )
+
+            # 画像のリソース
+            for img in doc_list.get("images", []):
+                img_id = img.get("id")
+                img_name = img.get("file_name", "Unknown")
+                resources.append(
+                    Resource(
+                        uri=f"resource://documents/{img_id}",
+                        name=f"画像: {img_name}",
+                        description=f"画像 '{img_name}' の詳細情報",
+                        mimeType="application/json"
+                    )
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"リソース一覧の動的生成に失敗: {e}")
+
+        return resources
 
     @server.read_resource()
     async def read_resource(uri: str) -> str:
