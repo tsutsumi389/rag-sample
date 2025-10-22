@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "rag-sample": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "rag-mcp-server"
+      ],
+      "cwd": "{{projectRoot}}",
+      "env": {}
+    }
+  }
+}
