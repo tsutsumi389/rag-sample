@@ -227,6 +227,10 @@ class ResourceHandler:
 
         if uri_str == "resource://documents/list":
             return await self._get_documents_list()
+        elif uri_str.startswith("resource://documents/"):
+            # resource://documents/{id} の形式
+            document_id = uri_str.replace("resource://documents/", "")
+            return await self._get_document_by_id(document_id)
         else:
             raise ValueError(f"Unknown resource: {uri_str}")
 
@@ -243,3 +247,15 @@ class ResourceHandler:
             limit=None,
             include_images=True
         )
+
+    async def _get_document_by_id(self, document_id: str) -> dict[str, Any]:
+        """ドキュメントID指定での取得実装。
+
+        Args:
+            document_id: ドキュメントID
+
+        Returns:
+            ドキュメント詳細情報
+        """
+        # DocumentServiceに処理を委譲
+        return self.document_service.get_document_by_id(document_id)

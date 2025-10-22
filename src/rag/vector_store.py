@@ -405,6 +405,75 @@ class VectorStore:
             logger.error(error_msg)
             raise VectorStoreError(error_msg) from e
 
+    def get_document_by_id(self, document_id: str) -> Optional[dict[str, Any]]:
+        """ドキュメントIDで特定のドキュメントを取得
+
+        Args:
+            document_id: 取得するドキュメントのID
+
+        Returns:
+            ドキュメント情報の辞書、見つからない場合はNone
+
+        Raises:
+            VectorStoreError: 取得に失敗した場合
+        """
+        if not self.collection:
+            raise VectorStoreError("コレクションが初期化されていません")
+
+        try:
+            logger.debug(f"ドキュメントID '{document_id}' を取得中...")
+
+            # document_idでフィルタリングして取得
+            results = self.collection.get(
+                where={"document_id": document_id},
+                include=["metadatas", "documents"]
+            )
+
+            if not results['ids']:
+                logger.info(f"ドキュメントID '{document_id}' が見つかりませんでした")
+                return None
+
+            # チャンク情報を集約
+            chunks = []
+            metadata = None
+            for chunk_id, doc_text, meta in zip(
+                results['ids'],
+                results['documents'],
+                results['metadatas']
+            ):
+                if metadata is None:
+                    metadata = meta
+
+                chunks.append({
+                    'chunk_id': chunk_id,
+                    'content': doc_text,
+                    'chunk_index': meta.get('chunk_index', 0),
+                    'start_char': meta.get('start_char', 0),
+                    'end_char': meta.get('end_char', 0),
+                    'size': meta.get('size', 0)
+                })
+
+            # チャンクをインデックス順にソート
+            chunks.sort(key=lambda x: x['chunk_index'])
+
+            document_info = {
+                'document_id': document_id,
+                'document_name': metadata.get('document_name', 'Unknown'),
+                'source': metadata.get('source', 'Unknown'),
+                'doc_type': metadata.get('doc_type', 'Unknown'),
+                'chunk_count': len(chunks),
+                'total_size': sum(chunk.get('size', 0) for chunk in chunks),
+                'chunks': chunks
+            }
+
+            logger.debug(f"ドキュメント '{document_info['document_name']}' を取得しました")
+            return document_info
+
+        except Exception as e:
+            error_msg = f"ドキュメントの取得に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            raise VectorStoreError(error_msg) from e
+
     def get_collection_info(self) -> dict[str, Any]:
         """コレクションの情報を取得
 

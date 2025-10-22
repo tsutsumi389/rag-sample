@@ -564,6 +564,64 @@ class DocumentService:
                 "error": str(e)
             }
 
+    def get_document_by_id(self, document_id: str) -> dict[str, Any]:
+        """ドキュメントIDで特定のドキュメントを取得
+
+        Args:
+            document_id: 取得するドキュメントのID
+
+        Returns:
+            ドキュメント詳細情報を含む辞書
+        """
+        try:
+            self.logger.info(f"ドキュメント取得: ID='{document_id}'")
+
+            # テキストドキュメントとして検索
+            doc_info = self.doc_vector_store.get_document_by_id(document_id)
+
+            if doc_info:
+                return {
+                    "success": True,
+                    "item_type": "document",
+                    "document": doc_info,
+                    "message": f"ドキュメント '{doc_info['document_name']}' を取得しました"
+                }
+
+            # 画像として検索
+            image_doc = self.img_vector_store.get_image_by_id(document_id)
+
+            if image_doc:
+                return {
+                    "success": True,
+                    "item_type": "image",
+                    "image": image_doc.to_dict(),
+                    "message": f"画像 '{image_doc.file_name}' を取得しました"
+                }
+
+            # どちらでも見つからなかった
+            return {
+                "success": False,
+                "message": f"ID '{document_id}' のドキュメントまたは画像が見つかりませんでした",
+                "error": "NotFound"
+            }
+
+        except VectorStoreError as e:
+            error_msg = f"ドキュメント取得に失敗しました（ID: '{document_id}'）: {str(e)}"
+            self.logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": "VectorStoreError"
+            }
+        except Exception as e:
+            error_msg = f"ドキュメント取得に失敗しました（ID: '{document_id}'）: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error": str(e)
+            }
+
     def clear_documents(
         self,
         clear_text: bool = True,
