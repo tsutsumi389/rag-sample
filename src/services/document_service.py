@@ -563,3 +563,97 @@ class DocumentService:
                 "message": error_msg,
                 "error": str(e)
             }
+
+    def clear_documents(
+        self,
+        clear_text: bool = True,
+        clear_images: bool = True
+    ) -> dict[str, Any]:
+        """すべてのドキュメントと画像を削除
+
+        Args:
+            clear_text: テキストドキュメントを削除するか（デフォルト: True）
+            clear_images: 画像を削除するか（デフォルト: True）
+
+        Returns:
+            削除結果とメタデータを含む辞書
+        """
+        try:
+            self.logger.warning(
+                f"ドキュメント削除を開始 "
+                f"(テキスト: {clear_text}, 画像: {clear_images})"
+            )
+
+            deleted_text_count = 0
+            deleted_image_count = 0
+            errors = []
+
+            # テキストドキュメントの削除
+            if clear_text:
+                try:
+                    # 削除前のカウント取得
+                    text_docs = self.doc_vector_store.list_documents()
+                    deleted_text_count = len(text_docs)
+
+                    # 削除実行
+                    self.doc_vector_store.clear()
+                    success_msg = f"テキストドキュメント {deleted_text_count}件を削除しました"
+                    self.logger.info(success_msg)
+                except VectorStoreError as e:
+                    error_msg = f"テキストドキュメントの削除エラー: {str(e)}"
+                    self.logger.error(error_msg)
+                    errors.append(error_msg)
+
+            # 画像の削除
+            if clear_images:
+                try:
+                    # 削除前のカウント取得
+                    images = self.img_vector_store.list_images()
+                    deleted_image_count = len(images)
+
+                    # 削除実行
+                    self.img_vector_store.clear()
+                    success_msg = f"画像 {deleted_image_count}件を削除しました"
+                    self.logger.info(success_msg)
+                except VectorStoreError as e:
+                    error_msg = f"画像の削除エラー: {str(e)}"
+                    self.logger.error(error_msg)
+                    errors.append(error_msg)
+
+            # 結果の生成
+            total_deleted = deleted_text_count + deleted_image_count
+
+            if errors:
+                return {
+                    "success": False,
+                    "deleted_text_count": deleted_text_count,
+                    "deleted_image_count": deleted_image_count,
+                    "total_deleted": total_deleted,
+                    "message": f"一部のドキュメント削除に失敗しました（削除済み: {total_deleted}件）",
+                    "errors": errors
+                }
+            else:
+                success_msg = (
+                    f"すべてのドキュメントを削除しました "
+                    f"（テキスト: {deleted_text_count}件, 画像: {deleted_image_count}件, 合計: {total_deleted}件）"
+                )
+                self.logger.info(success_msg)
+                return {
+                    "success": True,
+                    "deleted_text_count": deleted_text_count,
+                    "deleted_image_count": deleted_image_count,
+                    "total_deleted": total_deleted,
+                    "message": success_msg
+                }
+
+        except Exception as e:
+            error_msg = f"ドキュメント削除に失敗しました: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "deleted_text_count": 0,
+                "deleted_image_count": 0,
+                "total_deleted": 0,
+                "message": error_msg,
+                "error": str(e)
+            }

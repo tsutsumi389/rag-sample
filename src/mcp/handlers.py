@@ -55,6 +55,8 @@ class ToolHandler:
             return await self._search_images(**arguments)
         elif name == "remove_document":
             return await self._remove_document(**arguments)
+        elif name == "clear_documents":
+            return await self._clear_documents(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -163,6 +165,28 @@ class ToolHandler:
         return self.document_service.remove_document(
             item_id=item_id,
             item_type=item_type
+        )
+
+    async def _clear_documents(
+        self,
+        clear_text: bool = True,
+        clear_images: bool = True
+    ) -> dict[str, Any]:
+        """すべてのドキュメントと画像を削除する実装。
+
+        警告: この操作は取り消せません。
+
+        Args:
+            clear_text: テキストドキュメントを削除するか（デフォルト: True）
+            clear_images: 画像を削除するか（デフォルト: True）
+
+        Returns:
+            削除結果とメタデータを含む辞書
+        """
+        # DocumentServiceに処理を委譲
+        return self.document_service.clear_documents(
+            clear_text=clear_text,
+            clear_images=clear_images
         )
 
 
