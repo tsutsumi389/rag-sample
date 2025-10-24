@@ -108,7 +108,7 @@ ollama list
 uv sync
 
 # または開発環境用（推奨）
-uv sync --all-extras
+uv sync --extra dev
 ```
 
 #### 4. アプリケーションの初期化
@@ -546,6 +546,7 @@ MCPサーバーは以下のツールとリソースを提供します：
 | `search` | キーワードでドキュメントを検索 | `query` (必須)<br>`top_k` (結果数) |
 | `search_images` | テキストクエリで類似画像を検索 | `query` (必須)<br>`top_k` (結果数) |
 | `remove_document` | ドキュメントまたは画像を削除 | `item_id` (必須)<br>`item_type` (document/image/auto) |
+| `clear_documents` | すべてのドキュメントと画像を削除 | `clear_text` (テキストを削除)<br>`clear_images` (画像を削除) |
 
 **使用例（Claude Desktop上）:**
 
@@ -607,7 +608,7 @@ doc_001を削除してください
 - MCPサーバーは既存のRAGコア機能を呼び出すラッパー層
 - CLIとMCPサーバーは同じRAGコアを共有
 
-### トラブルシューティング
+#### トラブルシューティング（MCP関連）
 
 **Q: Claude DesktopでMCPサーバーが認識されない**
 ```bash
@@ -675,7 +676,7 @@ rag-sample/
 
 ```bash
 # 開発用依存関係を含めてインストール
-uv sync --all-extras
+uv sync --extra dev
 
 # または個別に
 uv add --dev pytest pytest-cov pytest-mock
