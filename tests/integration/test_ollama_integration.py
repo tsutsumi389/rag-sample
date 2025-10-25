@@ -195,7 +195,7 @@ class TestOllamaLLM:
         from src.models.document import SearchResult, Chunk
 
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
 
         # RAGEngineの作成
@@ -278,7 +278,7 @@ class TestOllamaLLM:
         from src.rag.embeddings import EmbeddingGenerator
 
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
 
         # RAGEngineの作成
@@ -322,7 +322,7 @@ class TestOllamaLLM:
         from src.models.document import SearchResult, Chunk
 
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
 
         # RAGEngineの作成
@@ -413,7 +413,7 @@ class TestOllamaErrorHandling:
 
         # OllamaのベースURLを存在しないアドレスに変更
         with patch.object(integration_config, 'ollama_base_url', 'http://non-existent-host:11434'):
-            vector_store = VectorStore(integration_config)
+            vector_store = create_vector_store(integration_config)
             embedding_generator = EmbeddingGenerator(integration_config)
 
             # RAGEngineの作成

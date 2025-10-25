@@ -107,7 +107,7 @@ class TestImageSearch:
             check_ollama_vision: Ollamaビジョンモデルチェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         vision_embeddings = VisionEmbeddings(integration_config)
         image_processor = ImageProcessor(vision_embeddings, integration_config)
 
@@ -163,7 +163,7 @@ class TestImageSearch:
             check_ollama_vision: Ollamaビジョンモデルチェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         vision_embeddings = VisionEmbeddings(integration_config)
         image_processor = ImageProcessor(vision_embeddings, integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
@@ -233,7 +233,7 @@ class TestImageSearch:
             check_ollama_vision: Ollamaビジョンモデルチェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         vision_embeddings = VisionEmbeddings(integration_config)
         image_processor = ImageProcessor(vision_embeddings, integration_config)
 
@@ -290,7 +290,7 @@ class TestImageSearch:
             check_ollama_vision: Ollamaビジョンモデルチェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         vision_embeddings = VisionEmbeddings(integration_config)
         image_processor = ImageProcessor(vision_embeddings, integration_config)
 

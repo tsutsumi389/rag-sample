@@ -56,7 +56,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -136,7 +136,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -207,7 +207,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -309,7 +309,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
