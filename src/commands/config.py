@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 from ..rag.embeddings import EmbeddingGenerator
-from ..rag.vector_store import VectorStore
+from ..rag.vector_store import create_vector_store
 from ..utils.config import Config, ConfigError, get_config
 
 console = Console()
@@ -55,7 +55,7 @@ def init_command(force: bool):
                 sys.exit(0)
 
         # VectorStoreの初期化
-        vector_store = VectorStore(config)
+        vector_store = create_vector_store(config)
         vector_store.initialize()
 
         if force:
@@ -138,7 +138,7 @@ def status_command(verbose: bool):
             sys.exit(0)
 
         # VectorStoreの初期化
-        vector_store = VectorStore(config)
+        vector_store = create_vector_store(config)
         vector_store.initialize()
 
         # コレクション情報の取得
@@ -385,7 +385,7 @@ LOG_LEVEL={Config.DEFAULT_LOG_LEVEL}
 
 def _display_config_info(
     config: Config,
-    vector_store: VectorStore,
+    vector_store,  # BaseVectorStore
     show_documents: bool = False
 ):
     """設定情報を表示（共通ヘルパー関数）"""

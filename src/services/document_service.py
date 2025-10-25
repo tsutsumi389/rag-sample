@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ..rag.vector_store import VectorStore, VectorStoreError
+from ..rag.vector_store import create_vector_store, VectorStoreError
 from ..rag.document_processor import DocumentProcessor, DocumentProcessorError, UnsupportedFileTypeError
 from ..rag.embeddings import EmbeddingGenerator
 from ..rag.image_processor import ImageProcessor, ImageProcessorError
@@ -48,15 +48,15 @@ class DocumentService:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        # テキストドキュメント用ベクトルストアの初期化
-        self.doc_vector_store = VectorStore(
+        # テキストドキュメント用ベクトルストアの初期化（ファクトリーで作成）
+        self.doc_vector_store = create_vector_store(
             config=self.config,
             collection_name="documents"
         )
         self.doc_vector_store.initialize()
 
-        # 画像用ベクトルストアの初期化
-        self.img_vector_store = VectorStore(
+        # 画像用ベクトルストアの初期化（ファクトリーで作成）
+        self.img_vector_store = create_vector_store(
             config=self.config,
             collection_name="images"
         )

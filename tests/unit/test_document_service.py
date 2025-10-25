@@ -5,7 +5,7 @@ from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
 
 from src.services.document_service import DocumentService, DocumentServiceError
-from src.rag.vector_store import VectorStoreError
+from src.rag.vector_store import BaseVectorStore, create_vector_store, VectorStoreError
 from src.rag.document_processor import DocumentProcessorError, UnsupportedFileTypeError
 from src.rag.image_processor import ImageProcessorError
 from src.rag.vision_embeddings import VisionEmbeddingError
@@ -28,7 +28,7 @@ def mock_config():
 @pytest.fixture
 def document_service(mock_config):
     """DocumentServiceのフィクスチャ"""
-    with patch('src.services.document_service.VectorStore'), \
+    with patch('src.services.document_service.create_vector_store'), \
          patch('src.services.document_service.DocumentProcessor'), \
          patch('src.services.document_service.EmbeddingGenerator'), \
          patch('src.services.document_service.VisionEmbeddings'), \
@@ -42,7 +42,7 @@ class TestDocumentServiceInit:
 
     def test_init_creates_components(self, mock_config):
         """初期化時に必要なコンポーネントが作成される"""
-        with patch('src.services.document_service.VectorStore') as mock_vs, \
+        with patch('src.services.document_service.create_vector_store') as mock_vs, \
              patch('src.services.document_service.DocumentProcessor') as mock_dp, \
              patch('src.services.document_service.EmbeddingGenerator') as mock_eg, \
              patch('src.services.document_service.VisionEmbeddings') as mock_ve, \

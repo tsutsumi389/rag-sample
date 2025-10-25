@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 
 from src.models.document import Chunk, ImageDocument
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.embeddings import EmbeddingGenerator
 from src.utils.config import get_config
 
@@ -23,7 +23,7 @@ def multimodal_vector_store(tmp_path):
     # テスト用の一時ディレクトリを使用
     config.chroma_persist_directory = str(tmp_path / "test_chroma_multimodal")
 
-    vector_store = VectorStore(config)
+    vector_store = create_vector_store(config)
     vector_store.initialize()
 
     yield vector_store

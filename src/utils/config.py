@@ -40,6 +40,21 @@ class Config:
     DEFAULT_MULTIMODAL_SEARCH_TEXT_WEIGHT = 0.5
     DEFAULT_MULTIMODAL_SEARCH_IMAGE_WEIGHT = 0.5
 
+    # ベクトルDB設定
+    DEFAULT_VECTOR_DB_TYPE = "chroma"
+
+    # Qdrant設定
+    DEFAULT_QDRANT_HOST = "localhost"
+    DEFAULT_QDRANT_PORT = 6333
+    DEFAULT_QDRANT_GRPC_PORT = 6334
+
+    # Milvus設定
+    DEFAULT_MILVUS_HOST = "localhost"
+    DEFAULT_MILVUS_PORT = 19530
+
+    # Weaviate設定
+    DEFAULT_WEAVIATE_URL = "http://localhost:8080"
+
     # バリデーション用の定数
     VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     MIN_CHUNK_SIZE = 100
@@ -173,6 +188,46 @@ class Config:
                 f"MULTIMODAL_SEARCH_IMAGE_WEIGHT must be a number, got: {os.getenv('MULTIMODAL_SEARCH_IMAGE_WEIGHT')}"
             )
 
+        # ベクトルDB種別
+        self.vector_db_type = os.getenv(
+            "VECTOR_DB_TYPE",
+            self.DEFAULT_VECTOR_DB_TYPE
+        ).lower()
+
+        # Qdrant設定
+        self.qdrant_host = os.getenv("QDRANT_HOST", self.DEFAULT_QDRANT_HOST)
+        try:
+            self.qdrant_port = int(os.getenv("QDRANT_PORT", str(self.DEFAULT_QDRANT_PORT)))
+        except ValueError:
+            raise ConfigError(
+                f"QDRANT_PORT must be an integer, got: {os.getenv('QDRANT_PORT')}"
+            )
+        try:
+            self.qdrant_grpc_port = int(os.getenv(
+                "QDRANT_GRPC_PORT",
+                str(self.DEFAULT_QDRANT_GRPC_PORT)
+            ))
+        except ValueError:
+            raise ConfigError(
+                f"QDRANT_GRPC_PORT must be an integer, got: {os.getenv('QDRANT_GRPC_PORT')}"
+            )
+        self.qdrant_api_key = os.getenv("QDRANT_API_KEY")
+
+        # Milvus設定
+        self.milvus_host = os.getenv("MILVUS_HOST", self.DEFAULT_MILVUS_HOST)
+        try:
+            self.milvus_port = int(os.getenv("MILVUS_PORT", str(self.DEFAULT_MILVUS_PORT)))
+        except ValueError:
+            raise ConfigError(
+                f"MILVUS_PORT must be an integer, got: {os.getenv('MILVUS_PORT')}"
+            )
+        self.milvus_user = os.getenv("MILVUS_USER")
+        self.milvus_password = os.getenv("MILVUS_PASSWORD")
+
+        # Weaviate設定
+        self.weaviate_url = os.getenv("WEAVIATE_URL", self.DEFAULT_WEAVIATE_URL)
+        self.weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+
         # バリデーション実行
         self._validate()
 
@@ -256,6 +311,14 @@ class Config:
                 f"got: {self.multimodal_search_image_weight}"
             )
 
+        # ベクトルDB種別のバリデーション
+        valid_db_types = ["chroma", "qdrant", "milvus", "weaviate"]
+        if self.vector_db_type not in valid_db_types:
+            raise ConfigError(
+                f"VECTOR_DB_TYPE must be one of {valid_db_types}, "
+                f"got: {self.vector_db_type}"
+            )
+
     def get_chroma_path(self) -> Path:
         """ChromaDBの永続化ディレクトリパスを取得
 
@@ -292,6 +355,25 @@ class Config:
             "image_resize_max_height": self.image_resize_max_height,
             "multimodal_search_text_weight": self.multimodal_search_text_weight,
             "multimodal_search_image_weight": self.multimodal_search_image_weight,
+
+            # ベクトルDB設定
+            "vector_db_type": self.vector_db_type,
+
+            # Qdrant設定
+            "qdrant_host": self.qdrant_host,
+            "qdrant_port": self.qdrant_port,
+            "qdrant_grpc_port": self.qdrant_grpc_port,
+            "qdrant_api_key": "***" if self.qdrant_api_key else None,
+
+            # Milvus設定
+            "milvus_host": self.milvus_host,
+            "milvus_port": self.milvus_port,
+            "milvus_user": self.milvus_user,
+            "milvus_password": "***" if self.milvus_password else None,
+
+            # Weaviate設定
+            "weaviate_url": self.weaviate_url,
+            "weaviate_api_key": "***" if self.weaviate_api_key else None,
         }
 
     def __repr__(self) -> str:

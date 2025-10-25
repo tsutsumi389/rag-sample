@@ -11,7 +11,7 @@ import pytest
 from pathlib import Path
 import chromadb
 
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.embeddings import EmbeddingGenerator
 from src.rag.document_processor import DocumentProcessor
 from src.rag.engine import RAGEngine
@@ -56,7 +56,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -136,7 +136,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -207,7 +207,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -309,7 +309,7 @@ class TestFullRAGFlow:
             check_ollama: Ollama起動チェック
         """
         # コンポーネントの初期化
-        vector_store = VectorStore(integration_config)
+        vector_store = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
 
@@ -401,7 +401,7 @@ class TestChromaDBPersistence:
             check_ollama: Ollama起動チェック
         """
         # 第1セッション: データの追加
-        vector_store1 = VectorStore(integration_config)
+        vector_store1 = create_vector_store(integration_config)
         embedding_generator = EmbeddingGenerator(integration_config)
         document_processor = DocumentProcessor(integration_config)
         vector_store2 = None
@@ -425,7 +425,7 @@ class TestChromaDBPersistence:
             vector_store1.close()
 
             # 第2セッション: データの読み込み
-            vector_store2 = VectorStore(integration_config)
+            vector_store2 = create_vector_store(integration_config)
             vector_store2.initialize()
 
             # データが永続化されていることを確認

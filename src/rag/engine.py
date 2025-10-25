@@ -12,7 +12,7 @@ from langchain_ollama import OllamaLLM
 from ..models.document import ChatHistory, SearchResult
 from ..utils.config import Config, get_config
 from .embeddings import EmbeddingGenerator
-from .vector_store import VectorStore
+from .vector_store import BaseVectorStore, create_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class RAGEngine:
     def __init__(
         self,
         config: Optional[Config] = None,
-        vector_store: Optional[VectorStore] = None,
+        vector_store: Optional[BaseVectorStore] = None,
         embedding_generator: Optional[EmbeddingGenerator] = None,
         llm_model: Optional[str] = None,
         max_chat_history: Optional[int] = 10
@@ -64,7 +64,7 @@ class RAGEngine:
 
         Args:
             config: アプリケーション設定（省略時はデフォルト設定を使用）
-            vector_store: ベクトルストアインスタンス（省略時は新規作成）
+            vector_store: ベクトルストアインスタンス（省略時は設定に基づいて自動作成）
             embedding_generator: 埋め込み生成器（省略時は新規作成）
             llm_model: LLMモデル名（省略時は設定ファイルの値を使用）
             max_chat_history: チャット履歴の最大メッセージ数
@@ -74,8 +74,8 @@ class RAGEngine:
         """
         self.config = config or get_config()
 
-        # ベクトルストアの設定
-        self.vector_store = vector_store or VectorStore(self.config)
+        # ベクトルストアの設定（ファクトリーで作成）
+        self.vector_store = vector_store or create_vector_store(self.config)
 
         # 埋め込み生成器の設定
         self.embedding_generator = embedding_generator or EmbeddingGenerator(

@@ -1,4 +1,4 @@
-"""ChromaDBベクトルストアモジュール
+"""ChromaDBベクトルストア実装
 
 このモジュールはChromaDBベクトルデータベースの管理・操作を担当します。
 ドキュメントの追加、削除、検索、メタデータフィルタリングなどの機能を提供します。
@@ -13,18 +13,14 @@ import chromadb
 from chromadb.api.models.Collection import Collection
 from chromadb.config import Settings
 
-from ..models.document import Chunk, SearchResult, ImageDocument
-from ..utils.config import Config
+from .base import BaseVectorStore, VectorStoreError
+from ...models.document import Chunk, SearchResult, ImageDocument
+from ...utils.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class VectorStoreError(Exception):
-    """ベクトルストア操作のエラー"""
-    pass
-
-
-class VectorStore:
+class ChromaVectorStore(BaseVectorStore):
     """ChromaDBベクトルストアの管理クラス
 
     PersistentClientを使用してデータの永続化を行います。
@@ -42,14 +38,13 @@ class VectorStore:
         config: Config,
         collection_name: str = "documents"
     ):
-        """VectorStoreの初期化
+        """ChromaVectorStoreの初期化
 
         Args:
             config: アプリケーション設定
             collection_name: コレクション名（デフォルト: "documents"）
         """
-        self.config = config
-        self.collection_name = collection_name
+        super().__init__(config, collection_name)
         self.client: Optional[chromadb.PersistentClient] = None
         self.collection: Optional[Collection] = None
 
@@ -151,7 +146,8 @@ class VectorStore:
         query_embedding: list[float],
         n_results: int = 5,
         where: Optional[dict[str, Any]] = None,
-        where_document: Optional[dict[str, Any]] = None
+        where_document: Optional[dict[str, Any]] = None,
+        **kwargs
     ) -> list[SearchResult]:
         """埋め込みベクトルを使用して類似ドキュメントを検索
 
@@ -235,7 +231,8 @@ class VectorStore:
         self,
         document_id: Optional[str] = None,
         chunk_ids: Optional[list[str]] = None,
-        where: Optional[dict[str, Any]] = None
+        where: Optional[dict[str, Any]] = None,
+        **kwargs
     ) -> int:
         """ドキュメントまたはチャンクを削除
 
@@ -597,7 +594,8 @@ class VectorStore:
         query_embedding: list[float],
         top_k: int = 5,
         collection_name: str = "images",
-        where: Optional[dict[str, Any]] = None
+        where: Optional[dict[str, Any]] = None,
+        **kwargs
     ) -> list[SearchResult]:
         """埋め込みベクトルを使用して類似画像を検索
 

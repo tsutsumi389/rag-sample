@@ -12,7 +12,11 @@ wheels/
 # Environment variables
 .env
 
-# ChromaDB data
+# Vector Database data directories
 chroma_db/
+docker/qdrant/data/
+docker/milvus/data/
+docker/weaviate/data/
 
 .coverage
+htmlcov/

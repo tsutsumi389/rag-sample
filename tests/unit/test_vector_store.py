@@ -1,6 +1,6 @@
 """ベクトルストアのユニットテスト
 
-VectorStore クラスの機能を検証します。
+ChromaVectorStore クラスの機能を検証します。
 外部依存（ChromaDB）はモック化してテストします。
 """
 
@@ -8,10 +8,8 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-from src.rag.vector_store import (
-    VectorStore,
-    VectorStoreError
-)
+from src.rag.vector_store.chroma_store import ChromaVectorStore
+from src.rag.vector_store import VectorStoreError
 from src.utils.config import Config
 
 
@@ -40,7 +38,7 @@ class TestVectorStoreInitialization:
         config = Config(env_file=str(empty_env_file))
 
         # VectorStoreインスタンスの作成
-        vector_store = VectorStore(
+        vector_store = ChromaVectorStore(
             config=config,
             collection_name="test_collection"
         )
@@ -76,7 +74,7 @@ class TestVectorStoreInitialization:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             # モッククライアントとコレクションの作成
             mock_client = Mock()
             mock_collection = Mock()
@@ -86,7 +84,7 @@ class TestVectorStoreInitialization:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config, collection_name="documents")
+            vector_store = ChromaVectorStore(config=config, collection_name="documents")
             vector_store.initialize()
 
             # クライアントが作成されたことを確認
@@ -130,10 +128,10 @@ class TestVectorStoreInitialization:
         config = Config(env_file=str(empty_env_file))
 
         # PersistentClientの初期化時に例外を発生させる
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client_class.side_effect = Exception("Database connection failed")
 
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
 
             # VectorStoreErrorがraiseされることを確認
             with pytest.raises(VectorStoreError) as exc_info:
@@ -169,7 +167,7 @@ class TestVectorStoreAddDocuments:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 0
@@ -178,7 +176,7 @@ class TestVectorStoreAddDocuments:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config, collection_name="documents")
+            vector_store = ChromaVectorStore(config=config, collection_name="documents")
             vector_store.initialize()
 
             # テスト用Chunkの作成
@@ -256,7 +254,7 @@ class TestVectorStoreAddDocuments:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 0
@@ -265,7 +263,7 @@ class TestVectorStoreAddDocuments:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # テスト用Chunkの作成
@@ -318,7 +316,7 @@ class TestVectorStoreAddDocuments:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 0
@@ -327,7 +325,7 @@ class TestVectorStoreAddDocuments:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # 空のリストで追加
@@ -361,7 +359,7 @@ class TestVectorStoreAddDocuments:
         config = Config(env_file=str(empty_env_file))
 
         # VectorStoreの作成（初期化なし）
-        vector_store = VectorStore(config=config)
+        vector_store = ChromaVectorStore(config=config)
 
         # テスト用Chunkの作成
         from src.models.document import Chunk
@@ -410,7 +408,7 @@ class TestVectorStoreSearch:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 10
@@ -455,7 +453,7 @@ class TestVectorStoreSearch:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config, collection_name="documents")
+            vector_store = ChromaVectorStore(config=config, collection_name="documents")
             vector_store.initialize()
 
             # 検索実行
@@ -508,7 +506,7 @@ class TestVectorStoreSearch:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 10
@@ -535,7 +533,7 @@ class TestVectorStoreSearch:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # whereフィルタを使用して検索
@@ -577,7 +575,7 @@ class TestVectorStoreSearch:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 10
@@ -607,7 +605,7 @@ class TestVectorStoreSearch:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # n_results=10で検索
@@ -643,7 +641,7 @@ class TestVectorStoreSearch:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 0
@@ -660,7 +658,7 @@ class TestVectorStoreSearch:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # 検索実行
@@ -691,7 +689,7 @@ class TestVectorStoreSearch:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 3
@@ -736,7 +734,7 @@ class TestVectorStoreSearch:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # 検索実行
@@ -783,7 +781,7 @@ class TestVectorStoreDelete:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -795,7 +793,7 @@ class TestVectorStoreDelete:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # document_id指定で削除
@@ -830,7 +828,7 @@ class TestVectorStoreDelete:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -842,7 +840,7 @@ class TestVectorStoreDelete:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # chunk_ids指定で削除
@@ -876,7 +874,7 @@ class TestVectorStoreDelete:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -888,7 +886,7 @@ class TestVectorStoreDelete:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # whereフィルタで削除
@@ -922,7 +920,7 @@ class TestVectorStoreDelete:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 10
@@ -931,7 +929,7 @@ class TestVectorStoreDelete:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # 削除条件なしで呼び出し
@@ -963,7 +961,7 @@ class TestVectorStoreDelete:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -975,7 +973,7 @@ class TestVectorStoreDelete:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # 削除実行
@@ -1012,7 +1010,7 @@ class TestVectorStoreOtherOperations:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 5
@@ -1064,7 +1062,7 @@ class TestVectorStoreOtherOperations:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # ドキュメント一覧を取得
@@ -1115,7 +1113,7 @@ class TestVectorStoreOtherOperations:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -1134,7 +1132,7 @@ class TestVectorStoreOtherOperations:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config, collection_name="test_collection")
+            vector_store = ChromaVectorStore(config=config, collection_name="test_collection")
             vector_store.initialize()
 
             # clear実行
@@ -1170,7 +1168,7 @@ class TestVectorStoreOtherOperations:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -1181,7 +1179,7 @@ class TestVectorStoreOtherOperations:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
             vector_store.initialize()
 
             # ドキュメント数を取得
@@ -1218,7 +1216,7 @@ class TestVectorStoreOtherOperations:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
 
@@ -1264,7 +1262,7 @@ class TestVectorStoreOtherOperations:
             mock_client_class.return_value = mock_client
 
             # VectorStoreの作成と初期化
-            vector_store = VectorStore(config=config, collection_name="my_collection")
+            vector_store = ChromaVectorStore(config=config, collection_name="my_collection")
             vector_store.initialize()
 
             # コレクション情報を取得
@@ -1298,7 +1296,7 @@ class TestVectorStoreOtherOperations:
         config = Config(env_file=str(empty_env_file))
 
         # ChromaDBのモック
-        with patch("src.rag.vector_store.chromadb.PersistentClient") as mock_client_class:
+        with patch("src.rag.vector_store.chroma_store.chromadb.PersistentClient") as mock_client_class:
             mock_client = Mock()
             mock_collection = Mock()
             mock_collection.count.return_value = 5
@@ -1307,7 +1305,7 @@ class TestVectorStoreOtherOperations:
             mock_client_class.return_value = mock_client
 
             # コンテキストマネージャーとして使用
-            vector_store = VectorStore(config=config)
+            vector_store = ChromaVectorStore(config=config)
 
             # with文の前はNone
             assert vector_store.collection is None

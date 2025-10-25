@@ -38,7 +38,7 @@ class TestRAGEngineInitialization:
         empty_env_file.write_text("")
 
         # 各コンポーネントのモック
-        with patch("src.rag.engine.VectorStore") as mock_vector_store_cls, \
+        with patch("src.rag.engine.create_vector_store") as mock_vector_store_cls, \
              patch("src.rag.engine.EmbeddingGenerator") as mock_embedding_cls, \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -127,7 +127,7 @@ class TestRAGEngineInitialization:
         custom_llm_model = "llama3.3"
 
         # 各コンポーネントのモック
-        with patch("src.rag.engine.VectorStore") as mock_vector_store_cls, \
+        with patch("src.rag.engine.create_vector_store") as mock_vector_store_cls, \
              patch("src.rag.engine.EmbeddingGenerator") as mock_embedding_cls, \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -149,7 +149,7 @@ class TestRAGEngineInitialization:
         custom_max_history = 20
 
         # 各コンポーネントのモック
-        with patch("src.rag.engine.VectorStore") as mock_vector_store_cls, \
+        with patch("src.rag.engine.create_vector_store") as mock_vector_store_cls, \
              patch("src.rag.engine.EmbeddingGenerator") as mock_embedding_cls, \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -165,7 +165,7 @@ class TestRAGEngineInitialization:
     def test_llm_initialization_failure_raises_rag_engine_error(self):
         """LLM初期化失敗時にRAGEngineErrorがraise（モック）"""
         # VectorStoreとEmbeddingGeneratorのモック
-        with patch("src.rag.engine.VectorStore") as mock_vector_store_cls, \
+        with patch("src.rag.engine.create_vector_store") as mock_vector_store_cls, \
              patch("src.rag.engine.EmbeddingGenerator") as mock_embedding_cls, \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -190,7 +190,7 @@ class TestRAGEngineInitialization:
         """configが省略された場合にデフォルト設定が使用される"""
         # get_configのモック
         with patch("src.rag.engine.get_config") as mock_get_config, \
-             patch("src.rag.engine.VectorStore"), \
+             patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -283,7 +283,7 @@ class TestRAGEngineRetrieve:
         mock_vector_store.search.return_value = mock_search_results
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -319,7 +319,7 @@ class TestRAGEngineRetrieve:
         mock_embedding_generator = Mock()
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -357,7 +357,7 @@ class TestRAGEngineRetrieve:
         mock_vector_store.search.return_value = mock_search_results
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -393,7 +393,7 @@ class TestRAGEngineRetrieve:
         mock_embedding_generator.embed_query.side_effect = Exception("Embedding failed")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -425,7 +425,7 @@ class TestRAGEngineRetrieve:
         mock_vector_store.search.side_effect = Exception("Vector store search failed")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM"):
 
@@ -473,7 +473,7 @@ class TestRAGEngineGenerateAnswer:
         ]
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -505,7 +505,7 @@ class TestRAGEngineGenerateAnswer:
         mock_llm = Mock()
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -534,7 +534,7 @@ class TestRAGEngineGenerateAnswer:
         mock_llm.invoke.return_value = "提供された情報では回答できません。"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -616,7 +616,7 @@ class TestRAGEngineGenerateAnswer:
         ]
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -661,7 +661,7 @@ class TestRAGEngineGenerateAnswer:
         ]
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -708,7 +708,7 @@ class TestRAGEngineGenerateAnswer:
 回答してください。"""
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -757,7 +757,7 @@ class TestRAGEngineGenerateAnswer:
         ]
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -812,7 +812,7 @@ class TestRAGEngineQuery:
         mock_llm.invoke.return_value = "Pythonは汎用プログラミング言語です。"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -857,7 +857,7 @@ class TestRAGEngineQuery:
         mock_llm.invoke.return_value = "回答"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -900,7 +900,7 @@ class TestRAGEngineQuery:
         mock_embedding_generator.embed_query.side_effect = Exception("Embedding error")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -936,7 +936,7 @@ class TestRAGEngineQuery:
         mock_llm.invoke.side_effect = Exception("LLM error")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -997,7 +997,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.return_value = "Pythonは動的型付け言語です。"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1035,7 +1035,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.return_value = "回答1"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1080,7 +1080,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.return_value = "回答"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1121,7 +1121,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.return_value = "回答"
 
         # RAGEngineの初期化（max_chat_history=4: 2往復分）
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1161,7 +1161,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.return_value = "情報が見つかりませんでした。"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1193,7 +1193,7 @@ class TestRAGEngineChat:
         mock_embedding_generator.embed_query.side_effect = Exception("Search error")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1228,7 +1228,7 @@ class TestRAGEngineChat:
         mock_llm.invoke.side_effect = Exception("LLM error")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1268,7 +1268,7 @@ class TestRAGEngineOtherFunctions:
         mock_llm.invoke.return_value = "回答"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1303,7 +1303,7 @@ class TestRAGEngineOtherFunctions:
         mock_llm.invoke.return_value = "回答"
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1356,7 +1356,7 @@ class TestRAGEngineOtherFunctions:
         mock_vector_store.get_collection_info.return_value = mock_vector_store_info
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1395,7 +1395,7 @@ class TestRAGEngineOtherFunctions:
         mock_vector_store.get_collection_info.side_effect = Exception("Not initialized")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1422,7 +1422,7 @@ class TestRAGEngineOtherFunctions:
         mock_llm = Mock()
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1449,7 +1449,7 @@ class TestRAGEngineOtherFunctions:
         mock_vector_store.initialize.side_effect = Exception("Initialization failed")
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1475,7 +1475,7 @@ class TestRAGEngineOtherFunctions:
         mock_llm = Mock()
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
@@ -1502,7 +1502,7 @@ class TestRAGEngineOtherFunctions:
         mock_llm = Mock()
 
         # RAGEngineの初期化
-        with patch("src.rag.engine.VectorStore"), \
+        with patch("src.rag.engine.create_vector_store"), \
              patch("src.rag.engine.EmbeddingGenerator"), \
              patch("src.rag.engine.OllamaLLM") as mock_llm_cls:
 
