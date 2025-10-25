@@ -328,3 +328,88 @@ MULTIMODAL_SEARCH_IMAGE_WEIGHT=0.5
 """)
 
     return Config(env_file=str(env_file))
+
+
+# ==================== ベクトルストア統合テスト用のfixture ====================
+
+@pytest.fixture(scope="session")
+def docker_services():
+    """Dockerサービスの起動・停止管理
+
+    テスト実行時に必要なDockerサービスを自動で起動・停止します。
+    """
+    import subprocess
+    import time
+    import os
+
+    # 起動が必要なサービスのリスト
+    services_to_start = []
+
+    # 環境変数からテスト対象のDBを判定
+    test_db_types = os.getenv("TEST_VECTOR_DBS", "chroma").split(",")
+
+    for db_type in test_db_types:
+        if db_type in ["qdrant", "milvus", "weaviate"]:
+            services_to_start.append(db_type)
+
+    # Dockerサービスの起動
+    for service in services_to_start:
+        try:
+            subprocess.run(
+                ["docker", "compose", "--profile", service, "up", "-d"],
+                check=True,
+                capture_output=True
+            )
+            print(f"Started {service} service")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to start {service}: {e}")
+
+    # サービスの起動待機
+    if services_to_start:
+        print("Waiting for services to be ready...")
+        time.sleep(10)
+
+    yield
+
+    # テスト終了後のクリーンアップ（オプション）
+    # 環境変数で制御
+    if os.getenv("CLEANUP_DOCKER", "false").lower() == "true":
+        for service in services_to_start:
+            try:
+                subprocess.run(
+                    ["docker", "compose", "--profile", service, "down"],
+                    check=True,
+                    capture_output=True
+                )
+                print(f"Stopped {service} service")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to stop {service}: {e}")
+
+
+@pytest.fixture
+def vector_store_factory(docker_services):
+    """ベクトルストアファクトリーフィクスチャ
+
+    テストで簡単にベクトルストアを作成できるようにします。
+    """
+    from src.rag.vector_store import create_vector_store
+    from src.utils.config import Config
+
+    created_stores = []
+
+    def factory(db_type: str, collection_name: str = "test"):
+        config = Config()
+        config.vector_db_type = db_type
+        store = create_vector_store(config, collection_name)
+        created_stores.append(store)
+        return store
+
+    yield factory
+
+    # クリーンアップ
+    for store in created_stores:
+        try:
+            store.clear()
+            store.close()
+        except:
+            pass
