@@ -36,7 +36,7 @@ class TestMultimodalRAGEngineInitialization:
         empty_env_file.write_text("")
 
         # 各コンポーネントのモック
-        with patch("src.rag.multimodal_engine.VectorStore") as mock_vector_store_cls, \
+        with patch("src.rag.multimodal_engine.create_vector_store") as mock_vector_store_cls, \
              patch("src.rag.multimodal_engine.EmbeddingGenerator") as mock_embedding_cls, \
              patch("src.rag.multimodal_engine.VisionEmbeddings") as mock_vision_cls, \
              patch("src.rag.multimodal_engine.ollama.Client") as mock_ollama_client_cls:
@@ -108,7 +108,7 @@ class TestMultimodalRAGEngineInitialization:
         empty_env_file.write_text("")
         config = Config(env_file=str(empty_env_file))
 
-        with patch("src.rag.multimodal_engine.VectorStore"), \
+        with patch("src.rag.multimodal_engine.create_vector_store"), \
              patch("src.rag.multimodal_engine.EmbeddingGenerator"), \
              patch("src.rag.multimodal_engine.VisionEmbeddings"), \
              patch("src.rag.multimodal_engine.ollama.Client") as mock_ollama_client_cls:
@@ -578,7 +578,7 @@ class TestCreateMultimodalRAGEngine:
         empty_env_file.write_text("")
         config = Config(env_file=str(empty_env_file))
 
-        with patch("src.rag.multimodal_engine.VectorStore"), \
+        with patch("src.rag.multimodal_engine.create_vector_store"), \
              patch("src.rag.multimodal_engine.EmbeddingGenerator"), \
              patch("src.rag.multimodal_engine.VisionEmbeddings"), \
              patch("src.rag.multimodal_engine.ollama.Client") as mock_ollama_client_cls:
@@ -600,7 +600,7 @@ class TestCreateMultimodalRAGEngine:
         empty_env_file.write_text("")
         config = Config(env_file=str(empty_env_file))
 
-        with patch("src.rag.multimodal_engine.VectorStore"), \
+        with patch("src.rag.multimodal_engine.create_vector_store"), \
              patch("src.rag.multimodal_engine.EmbeddingGenerator"), \
              patch("src.rag.multimodal_engine.VisionEmbeddings"), \
              patch("src.rag.multimodal_engine.ollama.Client") as mock_ollama_client_cls:

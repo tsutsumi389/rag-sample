@@ -45,7 +45,7 @@ def config(test_chroma_dir):
 @pytest.fixture(scope="module")
 def vector_store(config):
     """VectorStoreのインスタンスを作成"""
-    store = VectorStore(config)
+    store = create_vector_store(config)
     store.initialize()
     yield store
     store.close()

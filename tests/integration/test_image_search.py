@@ -142,7 +142,7 @@ class TestImageSearch:
             images = vector_store.list_images()
 
             assert len(images) >= 1
-            assert any(img['file_name'] == "red_image.jpg" for img in images)
+            assert any(img.file_name == "red_image.jpg" for img in images)
             print(f"Total images in store: {len(images)}")
 
         finally:
@@ -206,13 +206,14 @@ class TestImageSearch:
             # 検索結果の確認
             for i, result in enumerate(search_results, 1):
                 print(f"\nResult {i}:")
-                print(f"  File: {result['file_name']}")
-                print(f"  Score: {result['score']:.4f}")
-                print(f"  Caption: {result['caption'][:50]}...")
+                print(f"  File: {result.chunk.metadata.get('file_name', 'N/A')}")
+                print(f"  Score: {result.score:.4f}")
+                caption = result.chunk.metadata.get('caption', 'N/A')
+                print(f"  Caption: {caption[:50] if caption != 'N/A' else 'N/A'}...")
 
             # スコアが0-1の範囲であることを確認
             assert all(
-                0 <= result['score'] <= 1 for result in search_results
+                0 <= result.score <= 1 for result in search_results
             )
 
         finally:
@@ -328,7 +329,7 @@ class TestImageSearch:
             # タグでフィルタリングできることを確認（オプション）
             test_tagged_images = [
                 img for img in images
-                if "test" in img.get("tags", [])
+                if "test" in img.metadata.get("tags", [])
             ]
             assert len(test_tagged_images) >= len(sample_images)
 
