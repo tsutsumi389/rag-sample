@@ -14,7 +14,7 @@ import tempfile
 import shutil
 from PIL import Image
 
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.vision_embeddings import VisionEmbeddings
 from src.rag.image_processor import ImageProcessor
 from src.rag.embeddings import EmbeddingGenerator

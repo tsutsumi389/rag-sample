@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from ..rag.vector_store import VectorStore, VectorStoreError
+from ..rag.vector_store import BaseVectorStore, VectorStoreError, create_vector_store
 from ..rag.document_processor import (
     DocumentProcessor,
     DocumentProcessorError,
@@ -114,7 +114,7 @@ def _add_document_file(file_path: str, document_id: Optional[str], verbose: bool
 
             # コンポーネントの初期化
             task = progress.add_task("初期化中...", total=None)
-            vector_store = VectorStore(config)
+            vector_store = create_vector_store(config)
             vector_store.initialize()
 
             document_processor = DocumentProcessor(config)
@@ -206,7 +206,7 @@ def _add_image_file(image_path: str, caption: Optional[str], tags: Optional[str]
 
             # コンポーネントの初期化
             task = progress.add_task("初期化中...", total=None)
-            vector_store = VectorStore(config)
+            vector_store = create_vector_store(config)
             vector_store.initialize()
 
             vision_embeddings = VisionEmbeddings(config)
@@ -366,7 +366,7 @@ def _add_images_from_directory(directory_path: str, caption: Optional[str], tags
 
             # コンポーネントの初期化
             task = progress.add_task("初期化中...", total=None)
-            vector_store = VectorStore(config)
+            vector_store = create_vector_store(config)
             vector_store.initialize()
 
             vision_embeddings = VisionEmbeddings(config)
@@ -591,7 +591,7 @@ def _list_documents(limit: Optional[int], verbose: bool):
         config = get_config()
 
         # ベクトルストアの初期化
-        vector_store = VectorStore(config)
+        vector_store = create_vector_store(config)
         vector_store.initialize()
 
         # ドキュメント一覧の取得
@@ -677,7 +677,7 @@ def _list_images(limit: Optional[int], format: str, verbose: bool):
         config = get_config()
 
         # ベクトルストアの初期化
-        vector_store = VectorStore(config)
+        vector_store = create_vector_store(config)
         vector_store.initialize()
 
         # 画像一覧の取得

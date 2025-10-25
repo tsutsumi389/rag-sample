@@ -15,7 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..rag.engine import RAGEngine, RAGEngineError, create_rag_engine
-from ..rag.vector_store import VectorStore, VectorStoreError
+from ..rag.vector_store import create_vector_store, VectorStoreError
 from ..rag.vision_embeddings import VisionEmbeddings, VisionEmbeddingError
 from ..utils.config import get_config
 
@@ -467,7 +467,7 @@ def search_images(
         # 設定の読み込みとコンポーネントの初期化
         with console.status("[bold green]初期化中..."):
             config = get_config()
-            vector_store = VectorStore(config)
+            vector_store = create_vector_store(config)
             vector_store.initialize()
             
             vision_embeddings = VisionEmbeddings(config)
@@ -673,7 +673,7 @@ def search_multimodal(
         # 設定の読み込みとコンポーネントの初期化
         with console.status("[bold green]初期化中..."):
             config = get_config()
-            vector_store = VectorStore(config)
+            vector_store = create_vector_store(config)
             vector_store.initialize()
 
             # 埋め込み生成器の初期化

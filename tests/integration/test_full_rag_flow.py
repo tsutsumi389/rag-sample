@@ -11,7 +11,7 @@ import pytest
 from pathlib import Path
 import chromadb
 
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.embeddings import EmbeddingGenerator
 from src.rag.document_processor import DocumentProcessor
 from src.rag.engine import RAGEngine

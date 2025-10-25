@@ -190,7 +190,7 @@ class TestOllamaLLM:
             integration_config: 統合テスト用の設定
             check_ollama_service: Ollama起動チェック
         """
-        from src.rag.vector_store import VectorStore
+        from src.rag.vector_store import BaseVectorStore, create_vector_store
         from src.rag.embeddings import EmbeddingGenerator
         from src.models.document import SearchResult, Chunk
 
@@ -274,7 +274,7 @@ class TestOllamaLLM:
             integration_config: 統合テスト用の設定
             check_ollama_service: Ollama起動チェック
         """
-        from src.rag.vector_store import VectorStore
+        from src.rag.vector_store import BaseVectorStore, create_vector_store
         from src.rag.embeddings import EmbeddingGenerator
 
         # コンポーネントの初期化
@@ -317,7 +317,7 @@ class TestOllamaLLM:
             integration_config: 統合テスト用の設定
             check_ollama_service: Ollama起動チェック
         """
-        from src.rag.vector_store import VectorStore
+        from src.rag.vector_store import BaseVectorStore, create_vector_store
         from src.rag.embeddings import EmbeddingGenerator
         from src.models.document import SearchResult, Chunk
 
@@ -407,7 +407,7 @@ class TestOllamaErrorHandling:
         Args:
             integration_config: 統合テスト用の設定
         """
-        from src.rag.vector_store import VectorStore
+        from src.rag.vector_store import BaseVectorStore, create_vector_store
         from src.rag.embeddings import EmbeddingGenerator
         from src.models.document import SearchResult, Chunk
 

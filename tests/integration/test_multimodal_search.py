@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 
 from src.models.document import Chunk, ImageDocument
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.embeddings import EmbeddingGenerator
 from src.utils.config import get_config
 

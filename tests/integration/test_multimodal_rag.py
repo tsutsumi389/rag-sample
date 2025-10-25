@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 
 from src.rag.multimodal_engine import MultimodalRAGEngine
-from src.rag.vector_store import VectorStore
+from src.rag.vector_store import BaseVectorStore, create_vector_store
 from src.rag.embeddings import EmbeddingGenerator
 from src.rag.vision_embeddings import VisionEmbeddings
 from src.rag.image_processor import ImageProcessor
