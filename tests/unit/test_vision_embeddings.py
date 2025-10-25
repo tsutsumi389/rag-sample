@@ -28,7 +28,9 @@ class TestVisionEmbeddings:
 
             embeddings = VisionEmbeddings(config=multimodal_config)
 
-            assert embeddings.model_name == "llava"
+            # モデル名は設定から取得される（.envファイルまたはデフォルト値）
+            # ルートディレクトリの.envがある場合はそちらが優先される
+            assert embeddings.model_name in ["llava", "llava:latest"]
             assert embeddings.base_url == "http://localhost:11434"
             assert embeddings.config == multimodal_config
             mock_client_class.assert_called_once()
@@ -63,7 +65,7 @@ class TestVisionEmbeddings:
 
             # 例外が発生しないことを確認
             embeddings = VisionEmbeddings(config=multimodal_config)
-            assert embeddings.model_name == "llava"
+            assert embeddings.model_name in ["llava", "llava:latest"]
 
     def test_verify_model_not_found(self, multimodal_config):
         """モデルが見つからない場合のテスト"""
@@ -87,6 +89,10 @@ class TestVisionEmbeddings:
             mock_client.list.return_value = {
                 'models': [{'name': 'llava:latest'}]
             }
+            # chat APIのモック（キャプション生成）
+            mock_client.chat.return_value = {
+                'message': {'content': 'A test image with blue background and white circle'}
+            }
             # embeddings APIのモック
             mock_client.embeddings.return_value = {
                 'embedding': [0.1, 0.2, 0.3] * 100
@@ -99,6 +105,7 @@ class TestVisionEmbeddings:
             assert isinstance(result, list)
             assert len(result) == 300
             assert all(isinstance(x, float) for x in result)
+            mock_client.chat.assert_called_once()
             mock_client.embeddings.assert_called_once()
 
     def test_embed_image_file_not_found(self, multimodal_config):
@@ -139,6 +146,10 @@ class TestVisionEmbeddings:
             mock_client = Mock()
             mock_client.list.return_value = {
                 'models': [{'name': 'llava:latest'}]
+            }
+            # chat APIのモック（各画像のキャプション生成）
+            mock_client.chat.return_value = {
+                'message': {'content': 'Test image description'}
             }
             # 各画像に対して異なる埋め込みを返す
             mock_client.embeddings.side_effect = [
@@ -266,7 +277,7 @@ class TestCreateVisionEmbeddings:
             embeddings = create_vision_embeddings()
 
             assert isinstance(embeddings, VisionEmbeddings)
-            assert embeddings.model_name == "llava"
+            assert embeddings.model_name in ["llava", "llava:latest"]
 
     def test_create_custom_model(self):
         """カスタムモデルでの作成テスト"""
